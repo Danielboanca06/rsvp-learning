@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Active Recall & RSVP Speed Reading</title>
+<style>
+body {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    font-family: system-ui, -apple-system, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+.view {
+    display: none;
+    width: 100%;
+    max-width: 800px;
+    padding: 20px;
+    box-sizing: border-box;
+}
+#setup-view {
+    display: block;
+}
+textarea {
+    width: 100%;
+    height: 250px;
+    background-color: #2a2a2a;
+    color: #e0e0e0;
+    border: 1px solid #444;
+    padding: 15px;
+    box-sizing: border-box;
+    margin-bottom: 20px;
+    font-size: 1.1rem;
+    border-radius: 8px;
+    resize: vertical;
+}
+textarea:focus {
+    outline: none;
+    border-color: #666;
+}
+button {
+    background-color: #333;
+    color: #e0e0e0;
+    border: 1px solid #555;
+    font-size: 1.2rem;
+    cursor: pointer;
+    width: 100%;
+    height: 60px;
+    position: relative;
+    border-radius: 8px;
+    transition: background-color 0.2s;
+}
+button:hover {
+    background-color: #444;
+}
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.btn-icon {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.4rem;
+}
+.btn-text {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
+    font-weight: 500;
+}
+#rsvp-text {
+    font-size: 4rem;
+    text-align: center;
+    font-weight: bold;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.error-message {
+    color: #ff5555;
+    margin-top: 15px;
+    display: none;
+    text-align: center;
+    font-size: 1.1rem;
+    padding: 10px;
+    background-color: rgba(255, 85, 85, 0.1);
+    border-radius: 8px;
+}
+h2 {
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 2rem;
+}
+</style>
+</head>
+<body>
+
+<div id="setup-view" class="view">
+    <textarea id="source-text" placeholder="Paste your text here..."></textarea>
+    <button id="start-btn">
+        <span class="btn-icon">▶</span>
+        <span class="btn-text">Start Reading</span>
+    </button>
+</div>
+
+<div id="rsvp-view" class="view">
+    <div id="rsvp-text"></div>
+</div>
+
+<div id="summary-view" class="view">
+    <textarea id="summary-text" placeholder="Write your summary of the paragraph here..."></textarea>
+    <button id="submit-btn">
+        <span class="btn-icon">✓</span>
+        <span class="btn-text">Submit Summary</span>
+    </button>
+    <div id="error-msg" class="error-message"></div>
+</div>
+
+<div id="completion-view" class="view">
+    <h2>Reading Complete!</h2>
+    <button id="reset-btn">
+        <span class="btn-icon">↺</span>
+        <span class="btn-text">Start Over</span>
+    </button>
+</div>
+
+<script>
+const setupView = document.getElementById('setup-view');
+const rsvpView = document.getElementById('rsvp-view');
+const summaryView = document.getElementById('summary-view');
+const completionView = document.getElementById('completion-view');
+
+const sourceText = document.getElementById('source-text');
+const startBtn = document.getElementById('start-btn');
+const rsvpTextDisplay = document.getElementById('rsvp-text');
+const summaryText = document.getElementById('summary-text');
+const submitBtn = document.getElementById('submit-btn');
+const errorMsg = document.getElementById('error-msg');
+const resetBtn = document.getElementById('reset-btn');
+
+let paragraphs = [];
+let currentParagraphIndex = 0;
+let rsvpInterval = null;
+
+function showView(view) {
+    setupView.style.display = 'none';
+    rsvpView.style.display = 'none';
+    summaryView.style.display = 'none';
+    completionView.style.display = 'none';
+    view.style.display = 'block';
+}
+
+startBtn.addEventListener('click', () => {
+    const text = sourceText.value.trim();
+    if (!text) return;
+    paragraphs = text.split(/\n+/).filter(p => p.trim().length > 0);
+    if (paragraphs.length === 0) return;
+    currentParagraphIndex = 0;
+    startRSVP();
+});
+
+function startRSVP() {
+    showView(rsvpView);
+    const words = paragraphs[currentParagraphIndex].split(/\s+/).filter(w => w.length > 0);
+    if (words.length === 0) {
+        showSummaryView();
+        return;
+    }
+    let wordIndex = 0;
+    rsvpTextDisplay.textContent = words[0];
+    if (rsvpInterval) clearInterval(rsvpInterval);
+    rsvpInterval = setInterval(() => {
+        wordIndex++;
+        if (wordIndex >= words.length) {
+            clearInterval(rsvpInterval);
+            showSummaryView();
+        } else {
+            rsvpTextDisplay.textContent = words[wordIndex];
+        }
+    }, 200);
+}
+
+function showSummaryView() {
+    summaryText.value = '';
+    errorMsg.style.display = 'none';
+    submitBtn.disabled = false;
+    showView(summaryView);
+}
+
+submitBtn.addEventListener('click', async () => {
+    const summary = summaryText.value.trim();
+    if (!summary) return;
+    submitBtn.disabled = true;
+    errorMsg.style.display = 'none';
+
+    const original = paragraphs[currentParagraphIndex];
+    const prompt = `Compare the original paragraph with the user's summary. Return strictly a JSON object with a single key "score" containing an integer from 0 to 100.\nOriginal: ${original}\nSummary: ${summary}`;
+
+    try {
+        let modelName = 'llama3';
+        try {
+            const tagsRes = await fetch('http://localhost:11434/api/tags');
+            const tagsData = await tagsRes.json();
+            if (tagsData.models && tagsData.models.length > 0) {
+                modelName = tagsData.models[0].name;
+            }
+        } catch (e) {}
+
+        const response = await fetch('http://localhost:11434/api/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: modelName,
+                prompt: prompt,
+                stream: false,
+                format: 'json'
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+
+        const data = await response.json();
+        let score = 0;
+        try {
+            const parsed = JSON.parse(data.response);
+            score = parsed.score;
+        } catch (e) {
+            const match = data.response.match(/"score"\s*:\s*(\d+)/);
+            if (match) {
+                score = parseInt(match[1], 10);
+            }
+        }
+
+        if (score >= 80) {
+            currentParagraphIndex++;
+            if (currentParagraphIndex >= paragraphs.length) {
+                showView(completionView);
+            } else {
+                startRSVP();
+            }
+        } else {
+            errorMsg.textContent = `Score was ${score}. Needs to be 80 or above. Trying again in 2 seconds...`;
+            errorMsg.style.display = 'block';
+            setTimeout(() => {
+                startRSVP();
+            }, 2000);
+        }
+
+    } catch (error) {
+        errorMsg.textContent = 'Error evaluating summary. Ensure Ollama is running. Trying again in 2 seconds...';
+        errorMsg.style.display = 'block';
+        setTimeout(() => {
+            startRSVP();
+        }, 2000);
+    }
+});
+
+resetBtn.addEventListener('click', () => {
+    sourceText.value = '';
+    showView(setupView);
+});
+</script>
+</body>
+</html>
