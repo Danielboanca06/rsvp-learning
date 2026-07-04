@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { ReviewBadge } from "@/components/nav/ReviewBadge";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -31,7 +32,8 @@ export default function RootLayout({
             <Link href="/" className="text-sm font-semibold tracking-tight text-foreground">
               Active Recall
             </Link>
-            <nav className="flex items-center gap-6 text-sm text-muted">
+            <nav className="flex items-center gap-4 text-sm text-muted sm:gap-6">
+              <ReviewBadge />
               <Link href="/" className="transition-colors hover:text-foreground">
                 Dashboard
               </Link>

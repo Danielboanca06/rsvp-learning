@@ -6,10 +6,12 @@ export async function completeSession(sessionId: string) {
     data: { status: "completed", completedAt: new Date() },
   });
 
-  await prisma.document.update({
-    where: { id: session.documentId },
-    data: { startingWpm: session.currentWpm },
-  });
+  if (session.documentId) {
+    await prisma.document.update({
+      where: { id: session.documentId },
+      data: { startingWpm: session.currentWpm },
+    });
+  }
 
   return session;
 }

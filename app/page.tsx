@@ -7,7 +7,8 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { SparklineChart } from "@/components/charts/SparklineChart";
-import { PlusIcon, ArrowRightIcon, FileTextIcon } from "@/components/ui/icons";
+import { ReviewCallout } from "@/components/dashboard/ReviewCallout";
+import { PlusIcon, ArrowRightIcon, FileTextIcon, ClockIcon } from "@/components/ui/icons";
 
 type DocumentStat = {
   id: string;
@@ -25,6 +26,7 @@ type AnalyticsResponse = {
   scoreHistory: { createdAt: string; score: number }[];
   wpmHistory: { createdAt: string; wpm: number }[];
   totals: { documentCount: number; attemptCount: number; averageScore: number | null };
+  review: { dueCount: number; nextDueAt: string | null };
 };
 
 export default function DashboardPage() {
@@ -61,6 +63,14 @@ export default function DashboardPage() {
           </Button>
         </Link>
       </div>
+
+      {!loading && data!.review.dueCount > 0 && <ReviewCallout dueCount={data!.review.dueCount} />}
+      {!loading && data!.review.dueCount === 0 && data!.review.nextDueAt && (
+        <p className="-mt-4 flex items-center gap-1.5 text-xs text-muted">
+          <ClockIcon />
+          Next review due {new Date(data!.review.nextDueAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+        </p>
+      )}
 
       {loading ? <StatsSkeleton /> : <StatsRow totals={data!.totals} />}
 

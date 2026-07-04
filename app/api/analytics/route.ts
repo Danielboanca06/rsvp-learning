@@ -63,5 +63,19 @@ export async function GET() {
         : Math.round(attempts.reduce((sum, attempt) => sum + attempt.score, 0) / attempts.length),
   };
 
-  return NextResponse.json({ documents: documentStats, scoreHistory, wpmHistory, totals });
+  const now = new Date();
+  const dueCount = await prisma.chunk.count({ where: { dueAt: { lte: now } } });
+  const nextDue = await prisma.chunk.findFirst({
+    where: { dueAt: { gt: now } },
+    orderBy: { dueAt: "asc" },
+    select: { dueAt: true },
+  });
+
+  return NextResponse.json({
+    documents: documentStats,
+    scoreHistory,
+    wpmHistory,
+    totals,
+    review: { dueCount, nextDueAt: nextDue?.dueAt ?? null },
+  });
 }
