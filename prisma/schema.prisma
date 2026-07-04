@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Document {
+  id          String     @id @default(cuid())
+  title       String
+  createdAt   DateTime   @default(now())
+  startingWpm Int        @default(250)
+  chunks      Chunk[]
+  sessions    Session[]
+}
+
+model Chunk {
+  id         String     @id @default(cuid())
+  documentId String
+  document   Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  order      Int
+  title      String
+  content    String
+  wordCount  Int
+  attempts   Attempt[]
+
+  @@index([documentId, order])
+}
+
+model Session {
+  id          String     @id @default(cuid())
+  documentId  String
+  document    Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  startedAt   DateTime   @default(now())
+  completedAt DateTime?
+  currentWpm  Int
+  status      String     @default("active")
+  attempts    Attempt[]
+
+  @@index([documentId])
+}
+
+model Attempt {
+  id               String   @id @default(cuid())
+  sessionId        String
+  session          Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  chunkId          String
+  chunk            Chunk    @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  summary          String
+  score            Int
+  hint             String
+  socraticQuestion String?
+  wpmAtAttempt     Int
+  passed           Boolean
+  createdAt        DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([chunkId])
+}

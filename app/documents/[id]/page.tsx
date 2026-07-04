@@ -1,0 +1,213 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { Card } from "@/components/ui/Card";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { Button } from "@/components/ui/Button";
+import { ProgressBar } from "@/components/ui/ProgressBar";
+import { PlayIcon, CheckIcon, HistoryIcon, TrashIcon } from "@/components/ui/icons";
+import { cn } from "@/lib/cn";
+
+type Chunk = {
+  id: string;
+  order: number;
+  title: string;
+  wordCount: number;
+};
+
+type DocumentDetail = {
+  id: string;
+  title: string;
+  createdAt: string;
+  chunks: Chunk[];
+};
+
+type DocumentResponse = {
+  document: DocumentDetail;
+  masteredChunkIds: string[];
+  activeSession: { id: string } | null;
+};
+
+export default function DocumentOverviewPage() {
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const [data, setData] = useState<DocumentResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [starting, setStarting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/documents/${params.id}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (!cancelled) setData(json);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [params.id]);
+
+  async function handleStart() {
+    if (!data) return;
+
+    if (data.activeSession) {
+      router.push(`/documents/${data.document.id}/read?session=${data.activeSession.id}`);
+      return;
+    }
+
+    setStarting(true);
+    setNotice(null);
+
+    const response = await fetch("/api/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ documentId: data.document.id }),
+    });
+    const json = await response.json();
+
+    if (!response.ok) {
+      setNotice(json.error ?? "Could not start a session.");
+      setStarting(false);
+      return;
+    }
+
+    if (json.documentComplete) {
+      setNotice("You've already mastered every module in this document.");
+      setStarting(false);
+      return;
+    }
+
+    router.push(`/documents/${data.document.id}/read?session=${json.session.id}`);
+  }
+
+  async function handleDelete() {
+    if (!data) return;
+    await fetch(`/api/documents/${data.document.id}`, { method: "DELETE" });
+    router.push("/");
+  }
+
+  if (loading || !data) {
+    return <OverviewSkeleton />;
+  }
+
+  const { document, masteredChunkIds } = data;
+  const masteredSet = new Set(masteredChunkIds);
+  const totalChunks = document.chunks.length;
+  const masteryPct = totalChunks === 0 ? 0 : Math.round((masteredSet.size / totalChunks) * 100);
+  const currentChunk = document.chunks.find((chunk) => !masteredSet.has(chunk.id));
+
+  return (
+    <div className="flex flex-col gap-8">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">{document.title}</h1>
+          <p className="mt-1 text-sm text-muted">
+            {totalChunks} modules · created {new Date(document.createdAt).toLocaleDateString()}
+          </p>
+        </div>
+        <button
+          onClick={handleDelete}
+          className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-muted transition-colors hover:border-danger/40 hover:text-danger"
+          aria-label="Delete document"
+        >
+          <TrashIcon />
+        </button>
+      </div>
+
+      <Card className="flex flex-col gap-5">
+        <div>
+          <div className="mb-1.5 flex items-center justify-between text-sm">
+            <span className="text-muted">Mastery</span>
+            <span className="font-medium">{masteryPct}%</span>
+          </div>
+          <ProgressBar value={masteryPct} />
+        </div>
+
+        {notice && <p className="rounded-lg bg-accent-soft px-4 py-3 text-sm text-accent">{notice}</p>}
+
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Button icon={<PlayIcon />} loading={starting} onClick={handleStart} className="sm:w-auto sm:px-8">
+            {data.activeSession ? "Resume Session" : masteryPct === 100 ? "Practice Again" : "Start Session"}
+          </Button>
+          <Link href={`/documents/${document.id}/history`} className="w-full sm:w-auto">
+            <Button variant="secondary" icon={<HistoryIcon />} className="sm:w-auto sm:px-8">
+              View History
+            </Button>
+          </Link>
+        </div>
+      </Card>
+
+      <div>
+        <h2 className="mb-4 text-lg font-semibold tracking-tight">Learning Path</h2>
+        <div className="flex flex-col gap-2">
+          {document.chunks.map((chunk) => {
+            const mastered = masteredSet.has(chunk.id);
+            const isCurrent = currentChunk?.id === chunk.id;
+            return (
+              <div
+                key={chunk.id}
+                className={cn(
+                  "flex items-center gap-4 rounded-xl border p-4 transition-colors",
+                  isCurrent ? "border-accent bg-accent-soft" : "border-border bg-surface"
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium",
+                    mastered
+                      ? "bg-success-soft text-success"
+                      : isCurrent
+                        ? "bg-accent text-white"
+                        : "bg-border/60 text-muted"
+                  )}
+                >
+                  {mastered ? <CheckIcon /> : chunk.order + 1}
+                </span>
+                <div className="flex-1">
+                  <p className="font-medium leading-tight">{chunk.title}</p>
+                  <p className="mt-0.5 text-xs text-muted">{chunk.wordCount} words</p>
+                </div>
+                {mastered ? (
+                  <span className="text-xs font-medium text-success">Mastered</span>
+                ) : isCurrent ? (
+                  <span className="text-xs font-medium text-accent">Up next</span>
+                ) : (
+                  <span className="text-xs text-muted">Locked</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OverviewSkeleton() {
+  return (
+    <div className="flex flex-col gap-8">
+      <div>
+        <Skeleton className="h-7 w-64" />
+        <Skeleton className="mt-2 h-3 w-40" />
+      </div>
+      <Card className="flex flex-col gap-5">
+        <Skeleton className="h-2 w-full rounded-full" />
+        <div className="flex gap-3">
+          <Skeleton className="h-12 w-40 rounded-xl" />
+          <Skeleton className="h-12 w-40 rounded-xl" />
+        </div>
+      </Card>
+      <div className="flex flex-col gap-2">
+        {[0, 1, 2, 3, 4].map((index) => (
+          <Skeleton key={index} className="h-16 w-full rounded-xl" />
+        ))}
+      </div>
+    </div>
+  );
+}
