@@ -41,6 +41,10 @@ yarn-error.log*
 /prisma/dev.db
 /prisma/dev.db-journal
 /lib/generated
+# throwaway sqlite test-db artifacts (lib/__tests__/test-db.ts predates the
+# Neon-schema-per-test approach; catches any stray ones regardless of path)
+*.db
+*.db-journal
 
 # vercel
 .vercel
