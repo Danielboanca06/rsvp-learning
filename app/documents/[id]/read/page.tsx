@@ -6,6 +6,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { RsvpPlayer } from "@/components/rsvp/RsvpPlayer";
+import { ParagraphView } from "@/components/rsvp/ParagraphView";
+import { ReadingModeToggle, type ReadingMode } from "@/components/rsvp/ReadingModeToggle";
 import { SummaryForm } from "@/components/rsvp/SummaryForm";
 import { SocraticFeedback } from "@/components/rsvp/SocraticFeedback";
 import { PassBanner } from "@/components/rsvp/PassBanner";
@@ -44,11 +46,24 @@ function ReadSessionInner() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [currentChunk, setCurrentChunk] = useState<Chunk | null>(null);
   const [wpm, setWpm] = useState(250);
+  const [readingMode, setReadingMode] = useState<ReadingMode>("rsvp");
   const [grading, setGrading] = useState(false);
   const [retrySummary, setRetrySummary] = useState("");
   const [lastResult, setLastResult] = useState<AttemptResult | null>(null);
   const [averageScore, setAverageScore] = useState<number | null>(null);
   const [quizData, setQuizData] = useState<QuizData | null>(null);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("reading-mode");
+    if (stored === "rsvp" || stored === "paragraph") {
+      setReadingMode(stored);
+    }
+  }, []);
+
+  function handleReadingModeChange(mode: ReadingMode) {
+    setReadingMode(mode);
+    window.localStorage.setItem("reading-mode", mode);
+  }
 
   useEffect(() => {
     if (!sessionId) return;
@@ -212,15 +227,31 @@ function ReadSessionInner() {
           transition={{ duration: 0.2 }}
         >
           {view === "rsvp" && currentChunk && (
-            <RsvpPlayer
-              words={currentChunk.content.split(/\s+/).filter(Boolean)}
-              wpm={wpm}
-              moduleTitle={currentChunk.title}
-              documentId={params.id}
-              chunkId={currentChunk.id}
-              onComplete={() => setView("summary")}
-              onStop={handleStop}
-            />
+            <div className="flex flex-col gap-4">
+              <div className="flex justify-end">
+                <ReadingModeToggle mode={readingMode} onChange={handleReadingModeChange} />
+              </div>
+              {readingMode === "rsvp" ? (
+                <RsvpPlayer
+                  words={currentChunk.content.split(/\s+/).filter(Boolean)}
+                  wpm={wpm}
+                  moduleTitle={currentChunk.title}
+                  documentId={params.id}
+                  chunkId={currentChunk.id}
+                  onComplete={() => setView("summary")}
+                  onStop={handleStop}
+                />
+              ) : (
+                <ParagraphView
+                  content={currentChunk.content}
+                  moduleTitle={currentChunk.title}
+                  documentId={params.id}
+                  chunkId={currentChunk.id}
+                  onComplete={() => setView("summary")}
+                  onStop={handleStop}
+                />
+              )}
+            </div>
           )}
           {view === "summary" && currentChunk && (
             <SummaryForm

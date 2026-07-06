@@ -11,6 +11,7 @@ import { DailyRecallCard } from "@/components/dashboard/DailyRecallCard";
 import { DailyQuizCard } from "@/components/dashboard/DailyQuizCard";
 import { DocumentCarousel } from "@/components/dashboard/DocumentCarousel";
 import { DocumentCardSkeleton, type DocumentStat } from "@/components/dashboard/DocumentCard";
+import { SpacesGrid } from "@/components/dashboard/SpacesGrid";
 import { PlusIcon, FileTextIcon, ClockIcon, BrainIcon } from "@/components/ui/icons";
 
 type AnalyticsResponse = {
@@ -27,6 +28,7 @@ export function DashboardView({
   quizFetchUrl,
   quizRegenerateUrl,
   showDailyRecall,
+  showSpaces = false,
   title,
   subtitle,
   newDocumentHref,
@@ -35,6 +37,7 @@ export function DashboardView({
   quizFetchUrl: string;
   quizRegenerateUrl: string;
   showDailyRecall: boolean;
+  showSpaces?: boolean;
   title: string;
   subtitle: string;
   newDocumentHref: string;
@@ -127,11 +130,18 @@ export function DashboardView({
         ) : data!.recentDocuments.length === 0 ? (
           <EmptyState newDocumentHref={newDocumentHref} />
         ) : (
-          <DocumentCarousel documents={data!.recentDocuments} />
+          <DocumentCarousel documents={sortMasteredFirst(data!.recentDocuments)} />
         )}
       </div>
+
+      {showSpaces && <SpacesGrid />}
     </div>
   );
+}
+
+function sortMasteredFirst(documents: DocumentStat[]) {
+  const mastered = (document: DocumentStat) => document.totalChunks > 0 && document.masteryPct === 100;
+  return [...documents].sort((a, b) => Number(mastered(b)) - Number(mastered(a)));
 }
 
 function StatsRow({ totals, points }: { totals: AnalyticsResponse["totals"]; points: number }) {
