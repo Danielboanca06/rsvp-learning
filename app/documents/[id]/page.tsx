@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { ProgressBar } from "@/components/ui/ProgressBar";
-import { PlayIcon, CheckIcon, HistoryIcon, TrashIcon } from "@/components/ui/icons";
+import { PlayIcon, CheckIcon, HistoryIcon, TrashIcon, LayersIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 
 type Chunk = {
@@ -106,7 +106,7 @@ export default function DocumentOverviewPage() {
     <div className="flex flex-col gap-8">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{document.title}</h1>
+          <h1 className="font-display text-3xl italic tracking-tight">{document.title}</h1>
           <p className="mt-1 text-sm text-muted">
             {totalChunks} modules · created {new Date(document.createdAt).toLocaleDateString()}
           </p>
@@ -140,11 +140,16 @@ export default function DocumentOverviewPage() {
               View History
             </Button>
           </Link>
+          <Link href={`/documents/${document.id}/summary`} className="w-full sm:w-auto">
+            <Button variant="secondary" icon={<LayersIcon />} className="sm:w-auto sm:px-8">
+              View Summaries
+            </Button>
+          </Link>
         </div>
       </Card>
 
       <div>
-        <h2 className="mb-4 text-lg font-semibold tracking-tight">Learning Path</h2>
+        <h2 className="mb-4 font-display text-xl italic tracking-tight">Learning Path</h2>
         <div className="flex flex-col gap-2">
           {document.chunks.map((chunk) => {
             const mastered = masteredSet.has(chunk.id);
@@ -163,7 +168,7 @@ export default function DocumentOverviewPage() {
                     mastered
                       ? "bg-success-soft text-success"
                       : isCurrent
-                        ? "bg-accent text-white"
+                        ? "bg-accent text-accent-foreground"
                         : "bg-border/60 text-muted"
                   )}
                 >

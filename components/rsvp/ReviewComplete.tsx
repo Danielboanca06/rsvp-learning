@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { ArrowRightIcon } from "@/components/ui/icons";
+import { ArrowRightIcon, CheckIcon } from "@/components/ui/icons";
 
 export function ReviewComplete({
   reviewedCount,
@@ -14,11 +14,11 @@ export function ReviewComplete({
 }) {
   return (
     <div className="flex flex-col items-center gap-6 py-16 text-center">
-      <span className="flex h-16 w-16 items-center justify-center rounded-full bg-success-soft text-success text-2xl">
-        ✓
+      <span className="flex h-16 w-16 items-center justify-center rounded-full bg-success-soft text-success [&>svg]:h-7 [&>svg]:w-7">
+        <CheckIcon />
       </span>
       <div>
-        <h2 className="text-2xl font-semibold tracking-tight">Review complete</h2>
+        <h2 className="font-display text-3xl italic tracking-tight">Review complete</h2>
         <p className="mt-1 text-sm text-muted">
           {reviewedCount} {reviewedCount === 1 ? "card" : "cards"} reviewed. Come back when the next batch is due.
         </p>

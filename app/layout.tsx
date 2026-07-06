@@ -1,17 +1,26 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Fraunces, Karla } from "next/font/google";
 import Link from "next/link";
+import { ThemeProvider } from "next-themes";
+import { ClerkProvider, Show, SignInButton, UserButton } from "@clerk/nextjs";
+import { NavLinks } from "@/components/nav/NavLinks";
+import { ThemeToggle } from "@/components/nav/ThemeToggle";
 import { ReviewBadge } from "@/components/nav/ReviewBadge";
+import { IqPointsBadge } from "@/components/nav/IqPointsBadge";
+import { CreditsBadge } from "@/components/nav/CreditsBadge";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const karla = Karla({
+  variable: "--font-karla",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -25,25 +34,39 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full`}>
-      <body className="min-h-full flex flex-col bg-background text-foreground antialiased">
-        <header className="border-b border-border">
-          <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-4">
-            <Link href="/" className="text-sm font-semibold tracking-tight text-foreground">
-              Active Recall
-            </Link>
-            <nav className="flex items-center gap-4 text-sm text-muted sm:gap-6">
-              <ReviewBadge />
-              <Link href="/" className="transition-colors hover:text-foreground">
-                Dashboard
-              </Link>
-              <Link href="/documents/new" className="transition-colors hover:text-foreground">
-                New Document
-              </Link>
-            </nav>
-          </div>
-        </header>
-        <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-6 py-10">{children}</main>
+    <html lang="en" suppressHydrationWarning className={`${fraunces.variable} ${karla.variable} h-full`}>
+      <body className="flex min-h-full flex-col bg-background font-sans text-foreground antialiased">
+        <ClerkProvider>
+          <ThemeProvider attribute="data-theme" defaultTheme="dark">
+            <header className="border-b border-border">
+              <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-4">
+                <Link href="/" className="font-display text-lg italic tracking-tight text-foreground">
+                  Active Recall
+                </Link>
+                <nav className="flex items-center gap-4 text-sm sm:gap-6">
+                  <Show when="signed-in">
+                    <IqPointsBadge />
+                    <CreditsBadge />
+                    <ReviewBadge />
+                    <NavLinks />
+                  </Show>
+                  <ThemeToggle />
+                  <Show when="signed-out">
+                    <SignInButton mode="modal">
+                      <button className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent-hover">
+                        Sign in
+                      </button>
+                    </SignInButton>
+                  </Show>
+                  <Show when="signed-in">
+                    <UserButton />
+                  </Show>
+                </nav>
+              </div>
+            </header>
+            <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-6 py-10">{children}</main>
+          </ThemeProvider>
+        </ClerkProvider>
       </body>
     </html>
   );

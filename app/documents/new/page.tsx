@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Card } from "@/components/ui/Card";
 import { Textarea } from "@/components/ui/Textarea";
@@ -12,8 +12,13 @@ import { PlayIcon, UploadIcon, FileTextIcon } from "@/components/ui/icons";
 
 type Mode = "upload" | "paste";
 
-export default function NewDocumentPage() {
+type Space = { id: string; name: string; isDefault: boolean };
+
+const NEW_SPACE_OPTION = "__new_space__";
+
+function NewDocumentPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<Mode>("upload");
   const [file, setFile] = useState<File | null>(null);
@@ -23,7 +28,40 @@ export default function NewDocumentPage() {
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
-  const canSubmit = mode === "upload" ? file !== null : text.trim().length > 0;
+  const [spaces, setSpaces] = useState<Space[]>([]);
+  const [spaceId, setSpaceId] = useState<string>("");
+  const [newSpaceName, setNewSpaceName] = useState("");
+  const [creatingSpace, setCreatingSpace] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/spaces")
+      .then((res) => res.json())
+      .then((json: { spaces: Space[] }) => {
+        setSpaces(json.spaces ?? []);
+        const requested = searchParams.get("spaceId");
+        const fallback = json.spaces.find((space) => space.isDefault)?.id ?? json.spaces[0]?.id ?? "";
+        setSpaceId(requested && json.spaces.some((space) => space.id === requested) ? requested : fallback);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleCreateSpace() {
+    if (!newSpaceName.trim()) return;
+    const response = await fetch("/api/spaces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newSpaceName.trim() }),
+    });
+    if (response.ok) {
+      const { space } = await response.json();
+      setSpaces((prev) => [...prev, space]);
+      setSpaceId(space.id);
+      setNewSpaceName("");
+      setCreatingSpace(false);
+    }
+  }
+
+  const canSubmit = (mode === "upload" ? file !== null : text.trim().length > 0) && spaceId !== "";
 
   async function handleSubmit() {
     if (!canSubmit || submitting) return;
@@ -32,6 +70,7 @@ export default function NewDocumentPage() {
 
     const formData = new FormData();
     if (title.trim()) formData.set("title", title.trim());
+    formData.set("spaceId", spaceId);
     if (mode === "upload" && file) {
       formData.set("file", file);
     } else {
@@ -59,7 +98,7 @@ export default function NewDocumentPage() {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">New Document</h1>
+        <h1 className="font-display text-3xl italic tracking-tight">New Document</h1>
         <p className="mt-1 text-sm text-muted">
           Upload a text file or PDF, or paste text directly. We&apos;ll break it into a semantic Learning Path.
         </p>
@@ -71,7 +110,7 @@ export default function NewDocumentPage() {
             onClick={() => setMode("upload")}
             className={cn(
               "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-              mode === "upload" ? "bg-accent text-white" : "text-muted hover:text-foreground"
+              mode === "upload" ? "bg-accent text-accent-foreground" : "text-muted hover:text-foreground"
             )}
           >
             Upload File
@@ -80,7 +119,7 @@ export default function NewDocumentPage() {
             onClick={() => setMode("paste")}
             className={cn(
               "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-              mode === "paste" ? "bg-accent text-white" : "text-muted hover:text-foreground"
+              mode === "paste" ? "bg-accent text-accent-foreground" : "text-muted hover:text-foreground"
             )}
           >
             Paste Text
@@ -95,6 +134,47 @@ export default function NewDocumentPage() {
             placeholder="Give this document a name"
             className="w-full rounded-xl border border-border bg-surface p-3 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
           />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-muted">Space</label>
+          {!creatingSpace ? (
+            <select
+              value={spaceId}
+              onChange={(event) => {
+                if (event.target.value === NEW_SPACE_OPTION) {
+                  setCreatingSpace(true);
+                } else {
+                  setSpaceId(event.target.value);
+                }
+              }}
+              className="w-full rounded-xl border border-border bg-surface p-3 text-sm text-foreground focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+            >
+              {spaces.map((space) => (
+                <option key={space.id} value={space.id}>
+                  {space.name}
+                </option>
+              ))}
+              <option value={NEW_SPACE_OPTION}>+ New space</option>
+            </select>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                value={newSpaceName}
+                onChange={(event) => setNewSpaceName(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && handleCreateSpace()}
+                placeholder="New space name"
+                className="flex-1 rounded-xl border border-border bg-surface p-3 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              <Button className="w-auto px-4" disabled={!newSpaceName.trim()} onClick={handleCreateSpace}>
+                Create
+              </Button>
+              <Button variant="ghost" className="w-auto px-4" onClick={() => setCreatingSpace(false)}>
+                Cancel
+              </Button>
+            </div>
+          )}
         </div>
 
         <AnimatePresence mode="wait">
@@ -120,8 +200,8 @@ export default function NewDocumentPage() {
                 }}
                 onClick={() => fileInputRef.current?.click()}
                 className={cn(
-                  "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-12 text-center transition-colors",
-                  dragActive ? "border-accent bg-accent-soft" : "border-border hover:border-accent/50"
+                  "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-12 text-center transition-[border-color,background-color,transform] duration-150",
+                  dragActive ? "scale-[1.01] border-accent bg-accent-soft" : "border-border hover:border-accent/50"
                 )}
               >
                 <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-accent">
@@ -177,16 +257,15 @@ export default function NewDocumentPage() {
 function AnalyzingSkeleton() {
   return (
     <div className="flex flex-col items-center gap-8 py-16 text-center">
-      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft text-accent">
-        <motion.span
-          animate={{ rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 1.4, ease: "linear" }}
-        >
-          <UploadIcon />
-        </motion.span>
-      </span>
+      <motion.span
+        animate={{ scale: [1, 1.08, 1] }}
+        transition={{ repeat: Infinity, duration: 1.6, ease: "easeInOut" }}
+        className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft text-accent"
+      >
+        <UploadIcon />
+      </motion.span>
       <div>
-        <p className="text-lg font-medium">Analyzing your document...</p>
+        <p className="font-display text-xl italic">Analyzing your document...</p>
         <p className="mt-1 text-sm text-muted">
           Reading the text and grouping it into semantically coherent modules.
         </p>
@@ -197,5 +276,13 @@ function AnalyzingSkeleton() {
         ))}
       </div>
     </div>
+  );
+}
+
+export default function NewDocumentPage() {
+  return (
+    <Suspense fallback={<AnalyzingSkeleton />}>
+      <NewDocumentPageInner />
+    </Suspense>
   );
 }

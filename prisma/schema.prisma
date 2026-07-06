@@ -3,17 +3,38 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 model Document {
   id          String     @id @default(cuid())
+  userId      String
   title       String
   createdAt   DateTime   @default(now())
   startingWpm Int        @default(250)
+  spaceId     String
+  space       Space      @relation(fields: [spaceId], references: [id], onDelete: Restrict)
   chunks      Chunk[]
   sessions    Session[]
+  quizzes     Quiz[]
+
+  @@index([userId])
+  @@index([spaceId])
+}
+
+model Space {
+  id        String     @id @default(cuid())
+  userId    String
+  name      String
+  isDefault Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  documents Document[]
+  quizzes   Quiz[]
+
+  @@index([userId, isDefault])
+  @@index([createdAt])
 }
 
 model Chunk {
@@ -35,12 +56,17 @@ model Chunk {
   reps           Int       @default(0)
   lapses         Int       @default(0)
 
+  // Quiz tracking
+  quizWrongCount Int            @default(0)
+  quizQuestions  QuizQuestion[]
+
   @@index([documentId, order])
   @@index([dueAt])
 }
 
 model Session {
   id          String     @id @default(cuid())
+  userId      String
   documentId  String?
   document    Document?  @relation(fields: [documentId], references: [id], onDelete: Cascade)
   type        String     @default("study") // study | review
@@ -50,6 +76,7 @@ model Session {
   status      String     @default("active")
   attempts    Attempt[]
 
+  @@index([userId])
   @@index([documentId])
 }
 
@@ -69,4 +96,141 @@ model Attempt {
 
   @@index([sessionId])
   @@index([chunkId])
+}
+
+model PointsEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  amount    Int
+  reason    String   // chunk_passed | review_passed | word_recalled
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+model VocabularyWord {
+  id             String    @id @default(cuid())
+  userId         String
+  word           String
+  definition     String
+  documentId     String?
+  chunkId        String?
+  createdAt      DateTime  @default(now())
+  lastRecalledAt DateTime?
+  recallCount    Int       @default(0)
+
+  @@unique([userId, word])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([lastRecalledAt])
+}
+
+model Quiz {
+  id             String     @id @default(cuid())
+  userId         String
+  kind           String     // "module" | "daily"
+  documentId     String?
+  document       Document?  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  spaceId        String?
+  space          Space?     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  status         String     @default("active") // active | completed
+  totalQuestions Int
+  score          Int        @default(0)
+  createdAt      DateTime   @default(now())
+  completedAt    DateTime?
+  items          QuizItem[]
+
+  @@index([userId])
+  @@index([documentId])
+  @@index([kind, createdAt])
+  @@index([spaceId, kind, status])
+}
+
+model QuizItem {
+  id             String       @id @default(cuid())
+  quizId         String
+  quiz           Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  quizQuestionId String
+  quizQuestion   QuizQuestion @relation(fields: [quizQuestionId], references: [id], onDelete: Cascade)
+  order          Int
+  selectedIndex  Int?
+  correct        Boolean?
+  answeredAt     DateTime?
+
+  @@index([quizId])
+}
+
+model QuizQuestion {
+  id           String     @id @default(cuid())
+  chunkId      String
+  chunk        Chunk      @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  question     String
+  options      Json       // string[4]
+  correctIndex Int
+  createdAt    DateTime   @default(now())
+  items        QuizItem[]
+
+  @@index([chunkId])
+}
+
+// --- LLM gateway billing/usage ledger ---
+// Postgres is used in every non-local environment; app DB stays on SQLite locally
+// for now (see litellm-gateway-plan). Provider-facing rate limits are per API key,
+// not per user, so every one of these models exists to enforce OUR per-user
+// rationing independent of whatever the providers report.
+
+model UserPlan {
+  userId               String    @id
+  plan                 String    @default("free") // free | pro
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([plan])
+}
+
+model FreeQuotaCounter {
+  userId      String   @id
+  periodStart DateTime
+  count       Int      @default(0)
+
+  @@index([periodStart])
+}
+
+model UserCredits {
+  userId  String @id
+  balance Int    @default(0)
+}
+
+model CreditLedger {
+  id            String   @id @default(cuid())
+  userId        String
+  deltaCredits  Int      // positive = granted/purchased, negative = spent
+  reason        String   // stripe_subscription_grant | stripe_topup | llm_spend | refund
+  realCostUsd   Float?   // set on spend rows, from LiteLLM's reported cost
+  stripeEventId String?  @unique // idempotency guard against webhook replay
+  createdAt     DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model LlmUsageEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  task        String   // chunking | grading | quizgen
+  tier        String   // free | paid
+  servedModel String   // actual model LiteLLM routed to
+  success     Boolean
+  tokensIn    Int?
+  tokensOut   Int?
+  realCostUsd Float?
+  latencyMs   Int?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([task, createdAt])
 }

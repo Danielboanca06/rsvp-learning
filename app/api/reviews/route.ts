@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const now = new Date();
 
   const dueChunks = await prisma.chunk.findMany({
-    where: { dueAt: { lte: now } },
+    where: { dueAt: { lte: now }, document: { userId } },
     orderBy: { dueAt: "asc" },
     include: { document: { select: { id: true, title: true } } },
   });
@@ -14,10 +18,13 @@ export async function GET() {
 }
 
 export async function POST() {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const now = new Date();
 
   const dueChunks = await prisma.chunk.findMany({
-    where: { dueAt: { lte: now } },
+    where: { dueAt: { lte: now }, document: { userId } },
     orderBy: { dueAt: "asc" },
     include: { document: { select: { id: true, title: true, startingWpm: true } } },
   });
@@ -31,6 +38,7 @@ export async function POST() {
 
   const session = await prisma.session.create({
     data: {
+      userId,
       type: "review",
       currentWpm: averageWpm,
       status: "active",

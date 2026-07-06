@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { ArrowRightIcon, HistoryIcon } from "@/components/ui/icons";
+import { ArrowRightIcon, HistoryIcon, CheckIcon } from "@/components/ui/icons";
 
 export function SessionComplete({
   documentId,
@@ -16,11 +16,11 @@ export function SessionComplete({
 }) {
   return (
     <div className="flex flex-col items-center gap-6 py-16 text-center">
-      <span className="flex h-16 w-16 items-center justify-center rounded-full bg-success-soft text-success text-2xl">
-        ✓
+      <span className="flex h-16 w-16 items-center justify-center rounded-full bg-success-soft text-success [&>svg]:h-7 [&>svg]:w-7">
+        <CheckIcon />
       </span>
       <div>
-        <h2 className="text-2xl font-semibold tracking-tight">Document mastered</h2>
+        <h2 className="font-display text-3xl italic tracking-tight">Document mastered</h2>
         <p className="mt-1 text-sm text-muted">Every module in this document has been passed.</p>
       </div>
 

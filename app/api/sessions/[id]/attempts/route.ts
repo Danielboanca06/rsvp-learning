@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
-import { gradeSummary } from "@/lib/ollama";
+import { gradeSummaryGated, llmGateErrorResponse } from "@/lib/llm-quota";
 import { nextWpm } from "@/lib/wpm";
 import { scheduleNextReview } from "@/lib/fsrs";
 import { submitAttemptSchema } from "@/lib/validation";
 import { completeSession, findNextChunk } from "@/lib/session";
+import { pointsEventData } from "@/lib/points";
+import { shouldTriggerModuleQuiz } from "@/lib/quiz";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { id } = await params;
   const body = await request.json().catch(() => null);
   const parsed = submitAttemptSchema.safeParse(body);
@@ -14,7 +20,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: "A chunkId and non-empty summary are required." }, { status: 400 });
   }
 
-  const session = await prisma.session.findUnique({ where: { id } });
+  const session = await prisma.session.findFirst({ where: { id, userId } });
   if (!session || session.status !== "active") {
     return NextResponse.json({ error: "Session not found or already completed" }, { status: 404 });
   }
@@ -24,7 +30,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: "Chunk not found for this session's document" }, { status: 404 });
   }
 
-  const grading = await gradeSummary(chunk.content, parsed.data.summary);
+  let grading;
+  try {
+    grading = await gradeSummaryGated(userId, chunk.content, parsed.data.summary);
+  } catch (error) {
+    const response = llmGateErrorResponse(error);
+    if (response) return response;
+    throw error;
+  }
   const passed = grading.score >= 80;
   const updatedWpm = nextWpm(session.currentWpm, passed);
   const memoryUpdate = scheduleNextReview(chunk, grading.score);
@@ -55,6 +68,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         lapses: memoryUpdate.lapses,
       },
     }),
+    ...(passed
+      ? [
+          prisma.pointsEvent.create({
+            data: pointsEventData(userId, session.type === "review" ? "review_passed" : "chunk_passed"),
+          }),
+        ]
+      : []),
   ]);
 
   if (session.type === "review") {
@@ -96,5 +116,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     newWpm: updatedWpm,
     nextChunk: upcomingChunk,
     documentComplete: !upcomingChunk,
+    quizAvailable: upcomingChunk && shouldTriggerModuleQuiz(chunk.order) ? { chunkId: chunk.id } : null,
   });
 }

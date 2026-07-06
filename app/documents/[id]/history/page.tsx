@@ -47,7 +47,7 @@ export default function DocumentHistoryPage() {
         <Link href={`/documents/${params.id}`} className="text-xs text-muted transition-colors hover:text-foreground">
           ← Back to Learning Path
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+        <h1 className="mt-2 font-display text-3xl italic tracking-tight">
           {documentTitle ?? <Skeleton className="inline-block h-7 w-56 align-middle" />}
         </h1>
         <p className="mt-1 text-sm text-muted">Every summary you&apos;ve submitted for this document.</p>

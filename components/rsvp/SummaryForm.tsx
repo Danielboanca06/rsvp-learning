@@ -21,7 +21,7 @@ export function SummaryForm({
   return (
     <div className="flex flex-col gap-4 py-4">
       <div>
-        <h2 className="text-lg font-semibold tracking-tight">Summarize what you just read</h2>
+        <h2 className="font-display text-xl italic tracking-tight">Summarize what you just read</h2>
         <p className="mt-1 text-sm text-muted">{moduleTitle}</p>
       </div>
       <Textarea

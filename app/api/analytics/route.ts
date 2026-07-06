@@ -1,81 +1,10 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { auth } from "@clerk/nextjs/server";
+import { computeAnalytics } from "@/lib/analytics";
 
 export async function GET() {
-  const documents = await prisma.document.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { chunks: { select: { id: true } } },
-  });
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const attempts = await prisma.attempt.findMany({
-    orderBy: { createdAt: "asc" },
-    include: { chunk: { select: { documentId: true } }, session: { select: { documentId: true } } },
-  });
-
-  const documentTitleById = new Map(documents.map((document) => [document.id, document.title]));
-
-  const documentStats = await Promise.all(
-    documents.map(async (document) => {
-      const documentAttempts = attempts.filter((attempt) => attempt.chunk.documentId === document.id);
-      const passedChunkIds = new Set(
-        documentAttempts.filter((attempt) => attempt.passed).map((attempt) => attempt.chunkId)
-      );
-      const totalChunks = document.chunks.length;
-      const averageScore =
-        documentAttempts.length === 0
-          ? null
-          : Math.round(
-              documentAttempts.reduce((sum, attempt) => sum + attempt.score, 0) / documentAttempts.length
-            );
-
-      return {
-        id: document.id,
-        title: document.title,
-        createdAt: document.createdAt,
-        totalChunks,
-        masteredChunks: passedChunkIds.size,
-        masteryPct: totalChunks === 0 ? 0 : Math.round((passedChunkIds.size / totalChunks) * 100),
-        attemptCount: documentAttempts.length,
-        averageScore,
-      };
-    })
-  );
-
-  const scoreHistory = attempts.map((attempt) => ({
-    createdAt: attempt.createdAt,
-    score: attempt.score,
-    passed: attempt.passed,
-    documentTitle: documentTitleById.get(attempt.chunk.documentId) ?? "Unknown document",
-  }));
-
-  const wpmHistory = attempts.map((attempt) => ({
-    createdAt: attempt.createdAt,
-    wpm: attempt.wpmAtAttempt,
-    documentTitle: documentTitleById.get(attempt.chunk.documentId) ?? "Unknown document",
-  }));
-
-  const totals = {
-    documentCount: documents.length,
-    attemptCount: attempts.length,
-    averageScore:
-      attempts.length === 0
-        ? null
-        : Math.round(attempts.reduce((sum, attempt) => sum + attempt.score, 0) / attempts.length),
-  };
-
-  const now = new Date();
-  const dueCount = await prisma.chunk.count({ where: { dueAt: { lte: now } } });
-  const nextDue = await prisma.chunk.findFirst({
-    where: { dueAt: { gt: now } },
-    orderBy: { dueAt: "asc" },
-    select: { dueAt: true },
-  });
-
-  return NextResponse.json({
-    documents: documentStats,
-    scoreHistory,
-    wpmHistory,
-    totals,
-    review: { dueCount, nextDueAt: nextDue?.dueAt ?? null },
-  });
+  return NextResponse.json(await computeAnalytics(userId));
 }

@@ -10,6 +10,8 @@ import { SummaryForm } from "@/components/rsvp/SummaryForm";
 import { SocraticFeedback } from "@/components/rsvp/SocraticFeedback";
 import { PassBanner } from "@/components/rsvp/PassBanner";
 import { SessionComplete } from "@/components/rsvp/SessionComplete";
+import { QuizRunner, type QuizData } from "@/components/quiz/QuizRunner";
+import { UpgradePrompt } from "@/components/billing/UpgradePrompt";
 
 type Chunk = {
   id: string;
@@ -27,9 +29,10 @@ type AttemptResult = {
   newWpm: number;
   nextChunk: Chunk | null;
   documentComplete: boolean;
+  quizAvailable: { chunkId: string } | null;
 };
 
-type View = "loading" | "rsvp" | "summary" | "pass" | "fail" | "complete" | "error";
+type View = "loading" | "rsvp" | "summary" | "pass" | "quiz" | "fail" | "complete" | "error" | "upgrade";
 
 function ReadSessionInner() {
   const params = useParams<{ id: string }>();
@@ -45,6 +48,7 @@ function ReadSessionInner() {
   const [retrySummary, setRetrySummary] = useState("");
   const [lastResult, setLastResult] = useState<AttemptResult | null>(null);
   const [averageScore, setAverageScore] = useState<number | null>(null);
+  const [quizData, setQuizData] = useState<QuizData | null>(null);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -94,6 +98,15 @@ function ReadSessionInner() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chunkId: currentChunk.id, summary }),
     });
+
+    if (response.status === 429) {
+      const body = await response.json().catch(() => ({}));
+      setGrading(false);
+      setErrorMessage(body.error ?? "AI quota reached.");
+      setView("upgrade");
+      return;
+    }
+
     const result: AttemptResult = await response.json();
 
     setGrading(false);
@@ -127,11 +140,33 @@ function ReadSessionInner() {
     setView("rsvp");
   }
 
-  function handlePassContinue() {
+  function advanceToNextChunk() {
     if (lastResult?.nextChunk) {
       setCurrentChunk(lastResult.nextChunk);
       setView("rsvp");
     }
+  }
+
+  function handlePassContinue() {
+    if (lastResult?.quizAvailable) {
+      const { chunkId } = lastResult.quizAvailable;
+      setQuizData(null);
+      setView("quiz");
+      fetch("/api/quizzes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chunkId }),
+      })
+        .then((res) => res.json())
+        .then((json: QuizData) => setQuizData(json));
+      return;
+    }
+    advanceToNextChunk();
+  }
+
+  function handleQuizComplete() {
+    setQuizData(null);
+    advanceToNextChunk();
   }
 
   if (view === "loading") {
@@ -154,6 +189,14 @@ function ReadSessionInner() {
     );
   }
 
+  if (view === "upgrade") {
+    return (
+      <div className="mx-auto max-w-md">
+        <UpgradePrompt message={errorMessage ?? "AI quota reached."} />
+      </div>
+    );
+  }
+
   if (view === "complete") {
     return <SessionComplete documentId={params.id} finalWpm={wpm} averageScore={averageScore} />;
   }
@@ -173,6 +216,8 @@ function ReadSessionInner() {
               words={currentChunk.content.split(/\s+/).filter(Boolean)}
               wpm={wpm}
               moduleTitle={currentChunk.title}
+              documentId={params.id}
+              chunkId={currentChunk.id}
               onComplete={() => setView("summary")}
               onStop={handleStop}
             />
@@ -202,6 +247,15 @@ function ReadSessionInner() {
               onContinue={handlePassContinue}
             />
           )}
+          {view === "quiz" &&
+            (quizData ? (
+              <QuizRunner quiz={quizData} onComplete={handleQuizComplete} />
+            ) : (
+              <div className="flex flex-col gap-4 py-4">
+                <Skeleton className="h-3 w-32" />
+                <Skeleton className="h-32 w-full rounded-2xl" />
+              </div>
+            ))}
         </motion.div>
       </AnimatePresence>
     </div>

@@ -1,15 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
-import { chunkDocument } from "@/lib/ollama";
+import { chunkDocumentGated, llmGateErrorResponse } from "@/lib/llm-quota";
 import { createDocumentSchema } from "@/lib/validation";
+import { resolveSpaceId, SpaceNotFoundError } from "@/lib/spaces";
 import { PDFParse } from "pdf-parse";
 
+// Chunking calls the LLM gateway with a 180s outer timeout (lib/llm.ts) — exceeds
+// Vercel's default 60s function cap, so this needs Fluid Compute enabled on the
+// project (extends Hobby-tier functions to 300s max).
+export const maxDuration = 180;
+
 export async function GET() {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const documents = await prisma.document.findMany({
+    where: { userId },
     orderBy: { createdAt: "desc" },
     include: {
       chunks: { select: { id: true } },
       sessions: { select: { id: true, completedAt: true } },
+      space: { select: { name: true } },
     },
   });
 
@@ -29,6 +41,8 @@ export async function GET() {
         title: document.title,
         createdAt: document.createdAt,
         startingWpm: document.startingWpm,
+        spaceId: document.spaceId,
+        spaceName: document.space.name,
         totalChunks,
         masteredChunks,
         masteryPct: totalChunks === 0 ? 0 : Math.round((masteredChunks / totalChunks) * 100),
@@ -54,10 +68,14 @@ async function extractTextFromFile(file: File): Promise<string> {
 }
 
 export async function POST(request: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const formData = await request.formData();
   const file = formData.get("file");
   const rawText = formData.get("text");
   const rawTitle = formData.get("title");
+  const rawSpaceId = formData.get("spaceId");
 
   let text = "";
   let derivedTitle = "";
@@ -76,11 +94,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "A document title and non-empty text are required." }, { status: 400 });
   }
 
-  const modules = await chunkDocument(parsed.data.text);
+  let spaceId: string;
+  try {
+    spaceId = await resolveSpaceId(userId, typeof rawSpaceId === "string" && rawSpaceId.trim() ? rawSpaceId : null);
+  } catch (error) {
+    if (error instanceof SpaceNotFoundError) {
+      return NextResponse.json({ error: "The selected space does not exist." }, { status: 400 });
+    }
+    throw error;
+  }
+
+  let modules;
+  try {
+    modules = await chunkDocumentGated(userId, parsed.data.text);
+  } catch (error) {
+    const response = llmGateErrorResponse(error);
+    if (response) return response;
+    throw error;
+  }
 
   const document = await prisma.document.create({
     data: {
+      userId,
       title: parsed.data.title,
+      spaceId,
       chunks: {
         create: modules.map((module, index) => ({
           order: index,

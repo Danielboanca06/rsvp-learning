@@ -13,7 +13,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-white hover:bg-accent-hover",
+  primary: "bg-accent text-accent-foreground shadow-sm hover:bg-accent-hover",
   secondary: "bg-surface text-foreground border border-border hover:bg-surface-hover",
   ghost: "bg-transparent text-foreground border border-border hover:bg-surface",
   destructive: "bg-danger-soft text-danger border border-danger/30 hover:bg-danger/20",
@@ -45,21 +45,17 @@ export function Button({
     <button
       disabled={disabled || loading}
       className={cn(
-        "relative h-12 w-full min-w-[9rem] rounded-xl text-sm font-medium transition-colors",
-        "disabled:cursor-not-allowed disabled:opacity-50",
+        "flex h-12 w-full min-w-[9rem] items-center justify-center gap-2 rounded-xl text-sm font-medium",
+        "transition-[background-color,box-shadow,transform] duration-150 ease-out active:scale-[0.98]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        "disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100",
         variantClasses[variant],
         className
       )}
       {...props}
     >
-      {(icon || loading) && (
-        <span className="absolute left-4 top-1/2 -translate-y-1/2">
-          {loading ? <Spinner /> : icon}
-        </span>
-      )}
-      <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap">
-        {children}
-      </span>
+      {(icon || loading) && <span className="flex shrink-0 items-center">{loading ? <Spinner /> : icon}</span>}
+      <span className="whitespace-nowrap">{children}</span>
     </button>
   );
 }

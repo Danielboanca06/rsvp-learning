@@ -136,7 +136,7 @@ export default function ReviewPage() {
         <span className="flex h-14 w-14 items-center justify-center rounded-full bg-success-soft text-success">
           <ClockIcon />
         </span>
-        <h1 className="text-xl font-semibold tracking-tight">You&apos;re all caught up</h1>
+        <h1 className="font-display text-2xl italic tracking-tight">You&apos;re all caught up</h1>
         <p className="max-w-sm text-sm text-muted">Nothing is due for review right now — check back later.</p>
         <Link href="/" className="mt-2 w-auto">
           <Button icon={<ArrowRightIcon />} className="w-auto px-8">
@@ -181,6 +181,8 @@ export default function ReviewPage() {
               words={currentChunk.content.split(/\s+/).filter(Boolean)}
               wpm={wpm}
               moduleTitle={currentChunk.title}
+              documentId={currentChunk.document.id}
+              chunkId={currentChunk.id}
               onComplete={() => setView("summary")}
               onStop={handleStop}
             />

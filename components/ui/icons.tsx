@@ -109,3 +109,67 @@ export function LayersIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function BrainIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M9 4a2.5 2.5 0 0 0-2.5 2.5v.6A3 3 0 0 0 4 10v1a3 3 0 0 0 .8 2 3 3 0 0 0-.8 2v.5A2.5 2.5 0 0 0 6.5 18h1" />
+      <path d="M9 4a2.5 2.5 0 0 1 2.5 2.5v11A2.5 2.5 0 0 1 9 20" />
+      <path d="M15 4a2.5 2.5 0 0 1 2.5 2.5v.6a3 3 0 0 1 2.5 3v1a3 3 0 0 1-.8 2 3 3 0 0 1 .8 2v.5a2.5 2.5 0 0 1-2.5 2.5h-1" />
+      <path d="M15 4a2.5 2.5 0 0 0-2.5 2.5v11a2.5 2.5 0 0 0 2.5 2" />
+    </svg>
+  );
+}
+
+export function SearchIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="11" cy="11" r="7" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
+export function SunIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="12" cy="12" r="4.5" />
+      <path d="M12 3v1.5M12 19.5V21M4.9 4.9l1.1 1.1M18 18l1.1 1.1M3 12h1.5M19.5 12H21M4.9 19.1l1.1-1.1M18 6l1.1-1.1" />
+    </svg>
+  );
+}
+
+export function MoonIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" />
+    </svg>
+  );
+}
+
+export function HelpCircleIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9a2.5 2.5 0 0 1 4.9.8c0 1.7-2.4 2-2.4 3.5" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+
+export function ZapIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  );
+}
+
+export function XIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}

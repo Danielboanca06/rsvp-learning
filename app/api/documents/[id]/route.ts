@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { id } = await params;
 
-  const document = await prisma.document.findUnique({
-    where: { id },
+  const document = await prisma.document.findFirst({
+    where: { id, userId },
     include: { chunks: { orderBy: { order: "asc" } } },
   });
 
@@ -33,7 +37,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 }
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { id } = await params;
-  await prisma.document.delete({ where: { id } });
+  await prisma.document.deleteMany({ where: { id, userId } });
   return NextResponse.json({ success: true });
 }
