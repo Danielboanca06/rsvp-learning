@@ -39,7 +39,7 @@ export default function VocabularyPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-3xl italic tracking-tight">Vocabulary</h1>
           <p className="mt-1 text-sm text-muted">Words you&apos;ve saved while reading.</p>

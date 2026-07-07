@@ -22,7 +22,10 @@ export function NavLinks() {
           <Link
             key={link.href}
             href={link.href}
-            className={cn("transition-colors hover:text-foreground", active ? "text-foreground" : "text-muted")}
+            className={cn(
+              "py-1.5 transition-colors hover:text-foreground sm:py-0",
+              active ? "text-foreground" : "text-muted"
+            )}
           >
             {link.label}
           </Link>

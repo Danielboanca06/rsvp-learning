@@ -533,7 +533,9 @@ export function ProductFilm() {
           <div className="pf-chapters">
             {CHAPTERS.map((name) => (
               <button key={name} className="pf-chapter-btn" aria-label={`Go to ${name}`} type="button">
-                <span className="pf-fill" />
+                <span className="pf-chapter-track">
+                  <span className="pf-fill" />
+                </span>
               </button>
             ))}
           </div>
@@ -731,7 +733,8 @@ const PRODUCT_FILM_CSS = `
 .pf-icon-pause span { width: 3px; height: 100%; background: currentColor; border-radius: 1px; }
 
 .pf-chapters { flex: 1; display: flex; gap: 0.35rem; }
-.pf-chapter-btn { position: relative; flex: 1; height: 0.34rem; border-radius: 999px; background: var(--pf-border); border: none; cursor: pointer; overflow: hidden; padding: 0; }
+.pf-chapter-btn { position: relative; flex: 1; height: 1.75rem; border: none; cursor: pointer; padding: 0; background: transparent; display: flex; align-items: center; }
+.pf-chapter-track { position: relative; width: 100%; height: 0.34rem; border-radius: 999px; background: var(--pf-border); overflow: hidden; }
 .pf-chapter-btn .pf-fill { position: absolute; inset: 0; width: 0%; background: var(--pf-accent); border-radius: 999px; }
 .pf-chapter-btn.pf-done .pf-fill { width: 100%; }
 

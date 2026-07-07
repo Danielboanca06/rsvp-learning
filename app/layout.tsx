@@ -8,6 +8,7 @@ import { ThemeToggle } from "@/components/nav/ThemeToggle";
 import { ReviewBadge } from "@/components/nav/ReviewBadge";
 import { IqPointsBadge } from "@/components/nav/IqPointsBadge";
 import { CreditsBadge } from "@/components/nav/CreditsBadge";
+import { MobileNavMenu } from "@/components/nav/MobileNavMenu";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -39,16 +40,21 @@ export default function RootLayout({
         <ClerkProvider>
           <ThemeProvider attribute="data-theme" defaultTheme="dark">
             <header className="border-b border-border">
-              <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-4">
-                <Link href="/" className="font-display text-lg italic tracking-tight text-foreground">
+              <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
+                <Link
+                  href="/"
+                  className="shrink-0 font-display text-lg italic tracking-tight text-foreground"
+                >
                   Active Recall
                 </Link>
-                <nav className="flex items-center gap-4 text-sm sm:gap-6">
+                <nav className="flex items-center gap-3 text-sm sm:gap-4">
                   <Show when="signed-in">
-                    <IqPointsBadge />
-                    <CreditsBadge />
-                    <ReviewBadge />
-                    <NavLinks />
+                    <div className="hidden items-center gap-4 sm:flex sm:gap-6">
+                      <IqPointsBadge />
+                      <CreditsBadge />
+                      <ReviewBadge />
+                      <NavLinks />
+                    </div>
                   </Show>
                   <ThemeToggle />
                   <Show when="signed-out">
@@ -60,11 +66,14 @@ export default function RootLayout({
                   </Show>
                   <Show when="signed-in">
                     <UserButton />
+                    <MobileNavMenu />
                   </Show>
                 </nav>
               </div>
             </header>
-            <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-6 py-10">{children}</main>
+            <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-8 sm:px-6 sm:py-10">
+              {children}
+            </main>
           </ThemeProvider>
         </ClerkProvider>
       </body>
