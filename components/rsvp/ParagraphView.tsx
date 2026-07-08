@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { ArrowRightIcon, SearchIcon, StopIcon } from "@/components/ui/icons";
 import { WordLookupPanel } from "@/components/vocabulary/WordLookupPanel";
+import { SelectionDefinePopover } from "@/components/rsvp/SelectionDefinePopover";
 
 export function ParagraphView({
   content,
@@ -12,6 +13,7 @@ export function ParagraphView({
   chunkId,
   onComplete,
   onStop,
+  onAskAi,
 }: {
   content: string;
   moduleTitle: string;
@@ -19,8 +21,10 @@ export function ParagraphView({
   chunkId?: string;
   onComplete: () => void;
   onStop: () => void;
+  onAskAi?: (text: string) => void;
 }) {
   const [showLookup, setShowLookup] = useState(false);
+  const paragraphsRef = useRef<HTMLDivElement>(null);
 
   const paragraphs = useMemo(() => {
     const parts = content
@@ -39,13 +43,27 @@ export function ParagraphView({
         <span>{words.length} words</span>
       </div>
 
-      <div className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-surface p-6">
+      <div
+        ref={paragraphsRef}
+        className="flex select-text flex-col gap-4 rounded-2xl border border-border/60 bg-surface p-6"
+      >
         {paragraphs.map((paragraph, index) => (
           <p key={index} className="text-lg leading-relaxed text-foreground/90">
             {paragraph}
           </p>
         ))}
       </div>
+
+      <p className="text-xs text-muted">
+        Select any word or phrase above to look up its definition{onAskAi ? " or ask the AI about it" : ""}.
+      </p>
+
+      <SelectionDefinePopover
+        containerRef={paragraphsRef}
+        documentId={documentId}
+        chunkId={chunkId}
+        onAskAi={onAskAi}
+      />
 
       <div className="flex flex-wrap gap-3">
         <Button variant="secondary" icon={<SearchIcon />} onClick={() => setShowLookup(true)} className="w-auto px-8">

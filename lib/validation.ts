@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MIN_WPM, MAX_WPM } from "@/lib/wpm";
 
 export const createDocumentSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -46,6 +47,22 @@ export const createCheckoutSchema = z.object({
   kind: z.enum(["subscription", "topup_small", "topup_large"]),
 });
 
+export const updateSessionWpmSchema = z.object({
+  currentWpm: z.number().int().min(MIN_WPM).max(MAX_WPM),
+});
+
+export const createChatThreadSchema = z.object({
+  kind: z.enum(["selection", "practice"]),
+  documentId: z.string().min(1),
+  chunkId: z.string().min(1),
+  selectionText: z.string().trim().min(1).max(2000),
+  parentThreadId: z.string().min(1).optional(),
+});
+
+export const sendChatMessageSchema = z.object({
+  content: z.string().trim().min(1).max(4000),
+});
+
 export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
 export type StartSessionInput = z.infer<typeof startSessionSchema>;
 export type SubmitAttemptInput = z.infer<typeof submitAttemptSchema>;
@@ -56,3 +73,4 @@ export type CreateModuleQuizInput = z.infer<typeof createModuleQuizSchema>;
 export type SubmitQuizAnswerInput = z.infer<typeof submitQuizAnswerSchema>;
 export type CreateSpaceInput = z.infer<typeof createSpaceSchema>;
 export type CreateCheckoutInput = z.infer<typeof createCheckoutSchema>;
+export type UpdateSessionWpmInput = z.infer<typeof updateSessionWpmSchema>;

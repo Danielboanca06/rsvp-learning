@@ -35,6 +35,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       chunkId: chunk.id,
       order: chunk.order,
       title: chunk.title,
+      sectionTitle: chunk.sectionTitle,
+      keyPoints: Array.isArray(chunk.keyPoints) ? (chunk.keyPoints as string[]) : [],
       content: chunk.content,
       summary: bestAttempt?.summary ?? null,
       passed: bestAttempt?.passed ?? false,

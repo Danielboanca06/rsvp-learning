@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { StopIcon, SearchIcon } from "@/components/ui/icons";
 import { WordLookupPanel } from "@/components/vocabulary/WordLookupPanel";
+import { SpeedControl } from "@/components/rsvp/SpeedControl";
 
 export function RsvpPlayer({
   words,
@@ -15,6 +16,7 @@ export function RsvpPlayer({
   chunkId,
   onComplete,
   onStop,
+  onWpmChange,
 }: {
   words: string[];
   wpm: number;
@@ -23,6 +25,7 @@ export function RsvpPlayer({
   chunkId?: string;
   onComplete: () => void;
   onStop: () => void;
+  onWpmChange?: (wpm: number) => void;
 }) {
   const [index, setIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -80,6 +83,8 @@ export function RsvpPlayer({
       <div className="w-full">
         <ProgressBar value={progress} />
       </div>
+
+      {onWpmChange && <SpeedControl wpm={wpm} onChange={onWpmChange} className="max-w-xs" />}
 
       <div className="flex gap-3">
         <Button variant="secondary" icon={<SearchIcon />} onClick={() => setIsPaused(true)} className="w-auto px-8">

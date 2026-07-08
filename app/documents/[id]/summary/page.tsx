@@ -11,6 +11,8 @@ type Segment = {
   chunkId: string;
   order: number;
   title: string;
+  sectionTitle: string | null;
+  keyPoints: string[];
   content: string;
   summary: string | null;
   passed: boolean;
@@ -64,9 +66,17 @@ export default function DocumentSummaryPage() {
             <div key={segment.chunkId} className="flex flex-col gap-4 border-b border-border pb-6 last:border-b-0 md:flex-row md:items-start">
               <div className="flex-1">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                  {segment.order + 1}. {segment.title}
+                  {segment.order + 1}. {segment.sectionTitle && segment.sectionTitle !== segment.title ? `${segment.sectionTitle} · ` : ""}
+                  {segment.title}
                 </p>
                 <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{segment.content}</p>
+                {segment.keyPoints.length > 0 && (
+                  <ul className="mt-3 flex list-disc flex-col gap-1 pl-5 text-sm text-muted">
+                    {segment.keyPoints.map((point, index) => (
+                      <li key={index}>{point}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <Card className={cn("md:w-72 md:shrink-0", segment.summary ? "bg-accent-soft" : "bg-background")}>
                 <p className="text-xs font-medium uppercase tracking-wide text-muted">

@@ -124,6 +124,8 @@ export async function POST(request: NextRequest) {
           title: module.title,
           content: module.content,
           wordCount: module.content.split(/\s+/).filter(Boolean).length,
+          sectionTitle: module.sectionTitle,
+          keyPoints: module.keyPoints,
         })),
       },
     },

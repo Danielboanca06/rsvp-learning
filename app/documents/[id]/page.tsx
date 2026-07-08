@@ -7,7 +7,8 @@ import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { ProgressBar } from "@/components/ui/ProgressBar";
-import { PlayIcon, CheckIcon, HistoryIcon, TrashIcon, LayersIcon } from "@/components/ui/icons";
+import { PlayIcon, CheckIcon, HistoryIcon, TrashIcon, LayersIcon, MessageCircleIcon, BrainIcon } from "@/components/ui/icons";
+import { ThreadDrawer } from "@/components/chat/ThreadDrawer";
 import { cn } from "@/lib/cn";
 
 type Chunk = {
@@ -15,6 +16,7 @@ type Chunk = {
   order: number;
   title: string;
   wordCount: number;
+  sectionTitle: string | null;
 };
 
 type DocumentDetail = {
@@ -30,10 +32,21 @@ type DocumentResponse = {
   activeSession: { id: string } | null;
 };
 
+type ThreadSummary = {
+  id: string;
+  kind: string;
+  title: string;
+  chunkId: string | null;
+  parentThreadId: string | null;
+  _count: { messages: number };
+};
+
 export default function DocumentOverviewPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const [data, setData] = useState<DocumentResponse | null>(null);
+  const [threads, setThreads] = useState<ThreadSummary[]>([]);
+  const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -48,6 +61,12 @@ export default function DocumentOverviewPage() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    fetch(`/api/chat/threads?documentId=${params.id}`)
+      .then((res) => (res.ok ? res.json() : { threads: [] }))
+      .then((json) => {
+        if (!cancelled) setThreads(json.threads ?? []);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -151,46 +170,98 @@ export default function DocumentOverviewPage() {
       <div>
         <h2 className="mb-4 font-display text-xl italic tracking-tight">Learning Path</h2>
         <div className="flex flex-col gap-2">
-          {document.chunks.map((chunk) => {
+          {document.chunks.map((chunk, index) => {
             const mastered = masteredSet.has(chunk.id);
             const isCurrent = currentChunk?.id === chunk.id;
+            const chunkThreads = threads.filter((thread) => thread.chunkId === chunk.id);
+            const topLevelThreads = chunkThreads.filter((thread) => !thread.parentThreadId);
+            // Sub-modules are grouped under their parent section: show a header
+            // whenever the section changes as the path is walked in order.
+            const previousSection = index > 0 ? document.chunks[index - 1].sectionTitle : null;
+            const startsNewSection = chunk.sectionTitle !== null && chunk.sectionTitle !== previousSection;
             return (
-              <div
-                key={chunk.id}
-                className={cn(
-                  "flex items-center gap-4 rounded-xl border p-4 transition-colors",
-                  isCurrent ? "border-accent bg-accent-soft" : "border-border bg-surface"
+              <div key={chunk.id} className="flex flex-col gap-1.5">
+                {startsNewSection && (
+                  <p className={cn("text-xs font-medium uppercase tracking-wide text-muted", index > 0 && "mt-3")}>
+                    {chunk.sectionTitle}
+                  </p>
                 )}
-              >
-                <span
+                <div
                   className={cn(
-                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium",
-                    mastered
-                      ? "bg-success-soft text-success"
-                      : isCurrent
-                        ? "bg-accent text-accent-foreground"
-                        : "bg-border/60 text-muted"
+                    "flex items-center gap-4 rounded-xl border p-4 transition-colors",
+                    isCurrent ? "border-accent bg-accent-soft" : "border-border bg-surface"
                   )}
                 >
-                  {mastered ? <CheckIcon /> : chunk.order + 1}
-                </span>
-                <div className="flex-1">
-                  <p className="font-medium leading-tight">{chunk.title}</p>
-                  <p className="mt-0.5 text-xs text-muted">{chunk.wordCount} words</p>
+                  <span
+                    className={cn(
+                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium",
+                      mastered
+                        ? "bg-success-soft text-success"
+                        : isCurrent
+                          ? "bg-accent text-accent-foreground"
+                          : "bg-border/60 text-muted"
+                    )}
+                  >
+                    {mastered ? <CheckIcon /> : chunk.order + 1}
+                  </span>
+                  <div className="flex-1">
+                    <p className="font-medium leading-tight">{chunk.title}</p>
+                    <p className="mt-0.5 text-xs text-muted">{chunk.wordCount} words</p>
+                  </div>
+                  {mastered ? (
+                    <span className="text-xs font-medium text-success">Mastered</span>
+                  ) : isCurrent ? (
+                    <span className="text-xs font-medium text-accent">Up next</span>
+                  ) : (
+                    <span className="text-xs text-muted">Locked</span>
+                  )}
                 </div>
-                {mastered ? (
-                  <span className="text-xs font-medium text-success">Mastered</span>
-                ) : isCurrent ? (
-                  <span className="text-xs font-medium text-accent">Up next</span>
-                ) : (
-                  <span className="text-xs text-muted">Locked</span>
+
+                {/* AI discussions anchored to this module, with practice
+                    exercises nested as child sections under their parent. */}
+                {topLevelThreads.length > 0 && (
+                  <div className="ml-6 flex flex-col gap-1 border-l border-border/60 pl-4">
+                    {topLevelThreads.map((thread) => {
+                      const childThreads = chunkThreads.filter((child) => child.parentThreadId === thread.id);
+                      return (
+                        <div key={thread.id} className="flex flex-col gap-1">
+                          <ThreadRow thread={thread} onOpen={() => setOpenThreadId(thread.id)} />
+                          {childThreads.map((child) => (
+                            <div key={child.id} className="ml-5">
+                              <ThreadRow thread={child} onOpen={() => setOpenThreadId(child.id)} />
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             );
           })}
         </div>
       </div>
+
+      {openThreadId && <ThreadDrawer threadId={openThreadId} onClose={() => setOpenThreadId(null)} />}
     </div>
+  );
+}
+
+function ThreadRow({ thread, onOpen }: { thread: ThreadSummary; onOpen: () => void }) {
+  const isPractice = thread.kind === "practice";
+  return (
+    <button
+      onClick={onOpen}
+      className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm text-muted transition-colors hover:bg-surface hover:text-foreground"
+    >
+      <span className={cn("inline-flex shrink-0 [&>svg]:h-3.5 [&>svg]:w-3.5", isPractice ? "text-accent" : "")}>
+        {isPractice ? <BrainIcon /> : <MessageCircleIcon />}
+      </span>
+      <span className="truncate">{thread.title}</span>
+      <span className="shrink-0 text-xs text-muted/70">
+        {thread._count.messages} {thread._count.messages === 1 ? "message" : "messages"}
+      </span>
+    </button>
   );
 }
 

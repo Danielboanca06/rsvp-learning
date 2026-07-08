@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import { CheckIcon, SearchIcon, XIcon } from "@/components/ui/icons";
+import { useDefinitionLookup } from "@/lib/hooks/useDefinitionLookup";
 
 const SEARCH_THRESHOLD = 20;
 
@@ -32,53 +33,22 @@ export function WordLookupPanel({
 }) {
   const wordList = useMemo(() => uniqueWords(words), [words]);
   const [query, setQuery] = useState("");
-  const [selectedWord, setSelectedWord] = useState<string | null>(null);
-  const [loadingDefinition, setLoadingDefinition] = useState(false);
-  const [definition, setDefinition] = useState<string | null>(null);
-  const [manualDefinition, setManualDefinition] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [added, setAdded] = useState<Set<string>>(new Set());
+  const {
+    selectedWord,
+    loadingDefinition,
+    definition,
+    manualDefinition,
+    setManualDefinition,
+    adding,
+    added,
+    lookup,
+    add,
+    reset,
+  } = useDefinitionLookup(documentId, chunkId);
 
   const filteredWords = query.trim()
     ? wordList.filter((word) => word.toLowerCase().includes(query.trim().toLowerCase()))
     : wordList;
-
-  async function handleSelectWord(word: string) {
-    setSelectedWord(word);
-    setDefinition(null);
-    setManualDefinition("");
-    setLoadingDefinition(true);
-
-    const response = await fetch("/api/vocabulary/define", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ word }),
-    });
-    const json = await response.json();
-    setLoadingDefinition(false);
-    setDefinition(json.definition ?? null);
-  }
-
-  async function handleAdd() {
-    if (!selectedWord) return;
-    const finalDefinition = definition ?? manualDefinition.trim();
-    if (!finalDefinition) return;
-
-    setAdding(true);
-    await fetch("/api/vocabulary", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ word: selectedWord, definition: finalDefinition, documentId, chunkId }),
-    });
-    setAdding(false);
-    setAdded((prev) => new Set(prev).add(selectedWord.toLowerCase()));
-  }
-
-  function handleBack() {
-    setSelectedWord(null);
-    setDefinition(null);
-    setManualDefinition("");
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[oklch(15%_0.02_50/55%)] p-4 backdrop-blur-sm">
@@ -114,7 +84,7 @@ export function WordLookupPanel({
               {filteredWords.map((word) => (
                 <button
                   key={word}
-                  onClick={() => handleSelectWord(word)}
+                  onClick={() => lookup(word)}
                   className="rounded-full border border-border bg-background px-3 py-1.5 text-sm transition-colors hover:border-accent hover:text-accent"
                 >
                   {word}
@@ -130,7 +100,7 @@ export function WordLookupPanel({
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            <button onClick={handleBack} className="w-fit text-xs text-muted transition-colors hover:text-foreground">
+            <button onClick={reset} className="w-fit text-xs text-muted transition-colors hover:text-foreground">
               ← Back to word list
             </button>
             <p className="font-display text-2xl italic tracking-tight">{selectedWord}</p>
@@ -155,7 +125,7 @@ export function WordLookupPanel({
               icon={<CheckIcon />}
               loading={adding}
               disabled={added.has(selectedWord.toLowerCase()) || (!definition && manualDefinition.trim().length === 0)}
-              onClick={handleAdd}
+              onClick={add}
               className="w-auto px-6"
             >
               {added.has(selectedWord.toLowerCase()) ? "Added to Vocabulary" : "Add to Vocabulary"}

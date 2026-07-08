@@ -30,6 +30,11 @@ export type Tier = "free" | "paid";
 export type SemanticChunk = {
   title: string;
   content: string;
+  // Parent section this sub-module belongs to; null when the source is short
+  // enough that a topic never needed splitting (or on fallback paths).
+  sectionTitle: string | null;
+  // 3-5 pre-generated one-idea recall anchors, empty on fallback paths.
+  keyPoints: string[];
 };
 
 export type GradingResult = {
@@ -57,7 +62,7 @@ export type QuizQuestionResult = {
 // from "the model just returned junk JSON" in logs/telemetry.
 export class LlmGatewayUnavailableError extends Error {}
 
-async function resolveOllamaModel(): Promise<string> {
+export async function resolveOllamaModel(): Promise<string> {
   try {
     const res = await fetch(`${OLLAMA_BASE_URL}/api/tags`);
     const data = await res.json();
@@ -104,7 +109,7 @@ async function generateJSONViaOllama(prompt: string, timeoutMs: number): Promise
 // (same verification pass as the retired LiteLLM config) — re-check before
 // trusting these long-term, free-tier catalogs especially churn often.
 
-type Provider = "openrouter" | "gemini" | "groq" | "cerebras" | "anthropic";
+export type Provider = "openrouter" | "gemini" | "groq" | "cerebras" | "anthropic";
 
 type ModelEntry = { provider: Provider; model: string };
 
@@ -133,7 +138,7 @@ const MODEL_GROUPS: Record<string, ModelEntry[]> = {
   "quizgen-paid": [{ provider: "anthropic", model: "claude-haiku-4-5-20251001" }],
 };
 
-function envKeyForProvider(provider: Provider): string | undefined {
+export function envKeyForProvider(provider: Provider): string | undefined {
   switch (provider) {
     case "openrouter":
       return process.env.OPENROUTER_API_KEY;
@@ -309,30 +314,95 @@ function extractJsonObject(raw: string): unknown {
   }
 }
 
-function extractJsonArray(raw: string): unknown {
+type RawModule = { title?: unknown; content?: unknown; keyPoints?: unknown };
+
+// Normalizes the chunking response into flat modules tagged with their parent
+// section title. Prefers the two-level {sections: [{title, modules}]} shape the
+// prompt asks for, but tolerates the legacy flat shapes ({modules}, {chunks},
+// bare array) that weaker free-tier models still fall back to.
+function extractModules(raw: string): Array<{ sectionTitle: string | null; module: RawModule }> {
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed;
-    if (Array.isArray(parsed.modules)) return parsed.modules;
-    if (Array.isArray(parsed.chunks)) return parsed.chunks;
-    throw new Error("Parsed JSON did not contain a chunk array");
+    parsed = JSON.parse(raw);
   } catch {
-    const match = raw.match(/\[[\s\S]*\]/);
-    if (match) {
-      return JSON.parse(match[0]);
-    }
-    throw new Error("Model response did not contain a valid JSON array");
+    const match = raw.match(/[\[{][\s\S]*[\]}]/);
+    if (!match) throw new Error("Model response did not contain valid JSON");
+    parsed = JSON.parse(match[0]);
   }
+
+  const root = parsed as { sections?: unknown; modules?: unknown; chunks?: unknown };
+  if (root && Array.isArray(root.sections)) {
+    return root.sections.flatMap((section: { title?: unknown; modules?: unknown }) => {
+      const sectionTitle = typeof section?.title === "string" && section.title.trim() ? section.title.trim() : null;
+      const modules = Array.isArray(section?.modules) ? (section.modules as RawModule[]) : [];
+      return modules.map((module) => ({ sectionTitle, module }));
+    });
+  }
+
+  const flat = Array.isArray(parsed)
+    ? (parsed as RawModule[])
+    : Array.isArray(root?.modules)
+      ? (root.modules as RawModule[])
+      : Array.isArray(root?.chunks)
+        ? (root.chunks as RawModule[])
+        : null;
+  if (!flat) throw new Error("Parsed JSON did not contain sections or modules");
+  return flat.map((module) => ({ sectionTitle: null, module }));
+}
+
+function countWords(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length;
+}
+
+function splitIntoSentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 0);
+}
+
+// Safety net for when the model ignores the size guidance: any module too big
+// to recall in one sitting gets split locally at sentence boundaries into
+// digestible parts. Returns [content] unchanged when the module is fine.
+const MODULE_MAX_WORDS = 220;
+const MODULE_SPLIT_TARGET_WORDS = 120;
+
+function splitOversizedContent(content: string): string[] {
+  if (countWords(content) <= MODULE_MAX_WORDS) return [content];
+
+  const sentences = splitIntoSentences(content);
+  if (sentences.length <= 1) return [content];
+
+  const parts: string[] = [];
+  let buffer = "";
+  for (const sentence of sentences) {
+    const candidate = buffer ? `${buffer} ${sentence}` : sentence;
+    if (buffer && countWords(candidate) > MODULE_SPLIT_TARGET_WORDS) {
+      parts.push(buffer);
+      buffer = sentence;
+    } else {
+      buffer = candidate;
+    }
+  }
+  if (buffer) parts.push(buffer);
+  return parts;
 }
 
 function buildChunkingPrompt(text: string): string {
-  return `You are an instructional designer breaking a document into a "Learning Path" for a speed-reading and active-recall app.
+  return `You are an instructional designer breaking a document into a "Learning Path" for a speed-reading and active-recall app. After each module the reader must recall it from memory unaided, so every module has to be small enough to digest and recall in one sitting.
 
-Segment the text below into an ordered list of semantically coherent modules. Each module should cover ONE self-contained idea or concept, be a natural stopping point for a reader to pause and summarize, and be roughly 80-300 words. Do NOT just split on paragraph breaks — group related sentences/paragraphs together and split where the topic actually shifts. Preserve the original wording of the text exactly inside each module's "content" (do not paraphrase, summarize, or omit sentences); every part of the source text must appear in exactly one module and modules must appear in the same order as the source.
+Segment the text below in two levels:
+1. "sections": the document's major topics, in reading order. A section is where the subject matter genuinely shifts.
+2. Within each section, "modules": the actual learning units. Each module must cover exactly ONE self-contained idea, carry about 3-5 key points (never more), and be roughly 40-180 words. When a section is too large to recall at once, split it into several sequential modules at the natural seams between ideas — but do NOT fragment a single tight idea across modules just to hit a word count; a module must still make sense read on its own. Short documents may end up as one section with a few modules; that is fine.
 
-Return strictly a JSON object with one key, "modules", an array of objects in reading order, each with exactly two keys:
-- "title": a short (3-8 word) descriptive title for the module.
-- "content": the exact original text belonging to that module.
+Do NOT just split on paragraph breaks — group related sentences together and split where the ideas actually shift. Preserve the original wording of the text exactly inside each module's "content" (do not paraphrase, summarize, or omit sentences); every part of the source text must appear in exactly one module, and sections and modules must appear in the same order as the source.
+
+Return strictly a JSON object with one key, "sections": an array of objects, each with exactly two keys:
+- "title": a short (2-6 word) title for the section's topic.
+- "modules": an array of objects in reading order, each with exactly three keys:
+  - "title": a short (3-8 word) descriptive title for the module's single idea.
+  - "content": the exact original text belonging to that module.
+  - "keyPoints": an array of 3-5 short sentences, in the order they appear in the module. Each key point states exactly ONE idea in plain language — these are the facts the reader should be able to recall afterwards.
 
 Text:
 ${text}`;
@@ -410,15 +480,17 @@ function fallbackChunks(text: string): SemanticChunk[] {
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
 
-  const source = paragraphs.length > 0 ? paragraphs : [text.trim()];
+  // Oversized paragraphs get broken at sentence boundaries first, so a wall of
+  // text without paragraph breaks still ends up in recallable pieces.
+  const source = (paragraphs.length > 0 ? paragraphs : [text.trim()]).flatMap(splitOversizedContent);
   const groups: string[] = [];
   let buffer = "";
 
-  for (const paragraph of source) {
-    const candidate = buffer ? `${buffer}\n\n${paragraph}` : paragraph;
-    if (candidate.split(/\s+/).length > 250 && buffer) {
+  for (const piece of source) {
+    const candidate = buffer ? `${buffer}\n\n${piece}` : piece;
+    if (buffer && countWords(candidate) > MODULE_MAX_WORDS) {
       groups.push(buffer);
-      buffer = paragraph;
+      buffer = piece;
     } else {
       buffer = candidate;
     }
@@ -428,19 +500,43 @@ function fallbackChunks(text: string): SemanticChunk[] {
   return groups.map((content, index) => ({
     title: `Module ${index + 1}`,
     content,
+    sectionTitle: null,
+    keyPoints: [],
   }));
+}
+
+function parseKeyPoints(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((point): point is string => typeof point === "string" && point.trim().length > 0)
+    .map((point) => point.trim())
+    .slice(0, 5);
 }
 
 export async function chunkDocument(text: string, tier: Tier = "free"): Promise<SemanticChunk[]> {
   try {
     const raw = await generateJSON(buildChunkingPrompt(text), CHUNKING_HOP_TIMEOUT_MS, "chunking", tier);
-    const parsed = extractJsonArray(raw) as Array<{ title?: unknown; content?: unknown }>;
-    const chunks = parsed
-      .filter((item) => typeof item.content === "string" && item.content.trim().length > 0)
-      .map((item, index) => ({
-        title: typeof item.title === "string" && item.title.trim() ? item.title.trim() : `Module ${index + 1}`,
-        content: (item.content as string).trim(),
-      }));
+    const chunks = extractModules(raw)
+      .filter(({ module }) => typeof module.content === "string" && module.content.trim().length > 0)
+      .flatMap(({ sectionTitle, module }, index) => {
+        const title =
+          typeof module.title === "string" && module.title.trim() ? module.title.trim() : `Module ${index + 1}`;
+        const keyPoints = parseKeyPoints(module.keyPoints);
+        const parts = splitOversizedContent((module.content as string).trim());
+
+        if (parts.length === 1) {
+          return [{ title, content: parts[0], sectionTitle, keyPoints }];
+        }
+        // Module came back too big to recall at once and was split locally: the
+        // module title becomes the grouping and the key points can no longer be
+        // attributed to a single part, so they're dropped.
+        return parts.map((content, partIndex) => ({
+          title: `${title} · Part ${partIndex + 1}`,
+          content,
+          sectionTitle: sectionTitle ?? title,
+          keyPoints: [],
+        }));
+      });
 
     if (chunks.length === 0) {
       throw new Error("Model returned no usable chunks");

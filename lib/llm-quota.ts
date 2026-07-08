@@ -13,7 +13,7 @@ export const FREE_MONTHLY_QUOTA = 30; // AI actions/month on the free plan
 export const CREDIT_COST_PER_CALL = 1; // credits deducted per paid-tier LLM call
 
 export type Tier = "free" | "paid";
-export type LlmTask = "chunking" | "grading" | "quizgen";
+export type LlmTask = "chunking" | "grading" | "quizgen" | "chat";
 
 export class QuotaExceededError extends Error {}
 export class InsufficientCreditsError extends Error {}
@@ -154,6 +154,24 @@ async function recordLlmUsage(
         ]
       : []),
   ]);
+}
+
+/**
+ * Chat turns stream, so they can't use the call-and-record wrappers below:
+ * the route must reserve BEFORE opening the SSE stream (so quota errors can
+ * still be a clean 429) and record usage after the stream finishes. This pair
+ * exposes that split; reservation semantics are identical to the wrappers.
+ */
+export async function reserveChatTurn(userId: string, db: PrismaClient = defaultPrisma): Promise<GateResult> {
+  return reserveLlmCall(userId, db);
+}
+
+export async function recordChatUsage(
+  userId: string,
+  tier: Tier,
+  db: PrismaClient = defaultPrisma
+): Promise<void> {
+  await recordLlmUsage({ userId, task: "chat", tier }, db);
 }
 
 // --- Gated wrappers around lib/llm.ts's four exports. Route handlers should call

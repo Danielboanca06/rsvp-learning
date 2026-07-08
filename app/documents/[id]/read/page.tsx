@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Card } from "@/components/ui/Card";
@@ -14,6 +14,7 @@ import { PassBanner } from "@/components/rsvp/PassBanner";
 import { SessionComplete } from "@/components/rsvp/SessionComplete";
 import { QuizRunner, type QuizData } from "@/components/quiz/QuizRunner";
 import { UpgradePrompt } from "@/components/billing/UpgradePrompt";
+import { SelectionChatPanel } from "@/components/chat/SelectionChatPanel";
 
 type Chunk = {
   id: string;
@@ -21,7 +22,16 @@ type Chunk = {
   title: string;
   content: string;
   wordCount: number;
+  sectionTitle: string | null;
+  keyPoints: string[] | null;
 };
+
+// Sub-modules carry their parent section for context, e.g. "Photosynthesis · Light reactions".
+function chunkLabel(chunk: Chunk): string {
+  return chunk.sectionTitle && chunk.sectionTitle !== chunk.title
+    ? `${chunk.sectionTitle} · ${chunk.title}`
+    : chunk.title;
+}
 
 type AttemptResult = {
   score: number;
@@ -52,6 +62,33 @@ function ReadSessionInner() {
   const [lastResult, setLastResult] = useState<AttemptResult | null>(null);
   const [averageScore, setAverageScore] = useState<number | null>(null);
   const [quizData, setQuizData] = useState<QuizData | null>(null);
+  // "Ask AI" chat, anchored to the highlighted passage. Keyed by chunk so a
+  // new selection replaces the conversation instead of appending to it.
+  const [askAi, setAskAi] = useState<{ chunkId: string; selectionText: string } | null>(null);
+  const wpmPersistTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleWpmChange = useCallback(
+    (newWpm: number) => {
+      setWpm(newWpm);
+      if (!sessionId) return;
+
+      if (wpmPersistTimeout.current) clearTimeout(wpmPersistTimeout.current);
+      wpmPersistTimeout.current = setTimeout(() => {
+        fetch(`/api/sessions/${sessionId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentWpm: newWpm }),
+        }).catch(() => {});
+      }, 400);
+    },
+    [sessionId]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (wpmPersistTimeout.current) clearTimeout(wpmPersistTimeout.current);
+    };
+  }, []);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("reading-mode");
@@ -217,8 +254,11 @@ function ReadSessionInner() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-xl">
-      <AnimatePresence mode="wait">
+    // The reading column stays centered until the AI chat opens; then it
+    // shifts left (layout animation) to make room for the side panel.
+    <div className="mx-auto flex w-full max-w-5xl items-start justify-center gap-6">
+      <motion.div layout transition={{ type: "spring", stiffness: 260, damping: 30 }} className="w-full min-w-0 max-w-xl">
+        <AnimatePresence mode="wait">
         <motion.div
           key={view}
           initial={{ opacity: 0, y: 8 }}
@@ -235,27 +275,29 @@ function ReadSessionInner() {
                 <RsvpPlayer
                   words={currentChunk.content.split(/\s+/).filter(Boolean)}
                   wpm={wpm}
-                  moduleTitle={currentChunk.title}
+                  moduleTitle={chunkLabel(currentChunk)}
                   documentId={params.id}
                   chunkId={currentChunk.id}
                   onComplete={() => setView("summary")}
                   onStop={handleStop}
+                  onWpmChange={handleWpmChange}
                 />
               ) : (
                 <ParagraphView
                   content={currentChunk.content}
-                  moduleTitle={currentChunk.title}
+                  moduleTitle={chunkLabel(currentChunk)}
                   documentId={params.id}
                   chunkId={currentChunk.id}
                   onComplete={() => setView("summary")}
                   onStop={handleStop}
+                  onAskAi={(text) => setAskAi({ chunkId: currentChunk.id, selectionText: text })}
                 />
               )}
             </div>
           )}
           {view === "summary" && currentChunk && (
             <SummaryForm
-              moduleTitle={currentChunk.title}
+              moduleTitle={chunkLabel(currentChunk)}
               initialValue={retrySummary}
               grading={grading}
               onSubmit={handleSubmitSummary}
@@ -274,6 +316,7 @@ function ReadSessionInner() {
             <PassBanner
               score={lastResult.score}
               hint={lastResult.hint}
+              keyPoints={currentChunk?.keyPoints ?? undefined}
               newWpm={lastResult.newWpm}
               onContinue={handlePassContinue}
             />
@@ -287,7 +330,31 @@ function ReadSessionInner() {
                 <Skeleton className="h-32 w-full rounded-2xl" />
               </div>
             ))}
-        </motion.div>
+          </motion.div>
+        </AnimatePresence>
+      </motion.div>
+
+      <AnimatePresence>
+        {askAi && (
+          <motion.aside
+            key="ask-ai-panel"
+            initial={{ opacity: 0, x: 32 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 32 }}
+            transition={{ type: "spring", stiffness: 260, damping: 30 }}
+            className="fixed inset-x-0 bottom-0 top-16 z-40 bg-background/80 p-4 backdrop-blur-sm md:static md:inset-auto md:z-auto md:w-96 md:shrink-0 md:bg-transparent md:p-0 md:backdrop-blur-none"
+          >
+            <div className="h-full md:sticky md:top-6 md:h-[calc(100vh-10rem)] md:min-h-[24rem]">
+              <SelectionChatPanel
+                key={`${askAi.chunkId}:${askAi.selectionText}`}
+                documentId={params.id}
+                chunkId={askAi.chunkId}
+                selectionText={askAi.selectionText}
+                onClose={() => setAskAi(null)}
+              />
+            </div>
+          </motion.aside>
+        )}
       </AnimatePresence>
     </div>
   );

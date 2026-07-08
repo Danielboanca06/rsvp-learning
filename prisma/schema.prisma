@@ -45,6 +45,11 @@ model Chunk {
   title      String
   content    String
   wordCount  Int
+  // Parent section of the learning path this sub-module belongs to; null for
+  // documents chunked before sections existed and for fallback chunking.
+  sectionTitle String?
+  // Pre-generated recall anchors (string[], 3-5 one-idea sentences).
+  keyPoints    Json?
   attempts   Attempt[]
 
   // Spaced-repetition scheduling (FSRS-6)
@@ -173,6 +178,57 @@ model QuizQuestion {
   items        QuizItem[]
 
   @@index([chunkId])
+}
+
+// --- AI chat platform ---
+// App-wide conversation store, deliberately generic: any surface (selection
+// Q&A in the reader, future dashboard copilot, ...) creates a ChatThread with
+// whatever context anchors it needs. Sub-discussions (e.g. "practice
+// understanding" exercises) are child threads via parentThreadId, so they hang
+// off a document section rather than living inside the parent conversation.
+
+model ChatThread {
+  id     String @id @default(cuid())
+  userId String
+  // Surface that owns the thread: "selection" (Ask AI on a highlighted passage)
+  // | "practice" (child thread where the user writes their own summary).
+  // New surfaces add kinds without schema changes.
+  kind   String
+  title  String
+
+  // Context anchors — all optional so the model stays surface-agnostic.
+  documentId    String?
+  chunkId       String?
+  selectionText String?
+
+  parentThreadId String?
+  parent         ChatThread?  @relation("ThreadChildren", fields: [parentThreadId], references: [id], onDelete: Cascade)
+  children       ChatThread[] @relation("ThreadChildren")
+
+  status    String   @default("active") // active | archived
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages ChatMessage[]
+
+  @@index([userId, updatedAt])
+  @@index([documentId, chunkId])
+  @@index([parentThreadId])
+}
+
+model ChatMessage {
+  id       String     @id @default(cuid())
+  threadId String
+  thread   ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role     String // user | assistant
+  // Ordered array of typed message parts (see lib/chat/protocol.ts). Text and
+  // tool activity today; diagrams/charts/citations/cards later — renderers skip
+  // part types they don't know, so new types need no migration.
+  parts    Json
+  status   String     @default("complete") // complete | failed
+  createdAt DateTime  @default(now())
+
+  @@index([threadId, createdAt])
 }
 
 // --- LLM gateway billing/usage ledger ---
