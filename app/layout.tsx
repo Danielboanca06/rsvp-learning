@@ -8,6 +8,7 @@ import { ThemeToggle } from "@/components/nav/ThemeToggle";
 import { ReviewBadge } from "@/components/nav/ReviewBadge";
 import { IqPointsBadge } from "@/components/nav/IqPointsBadge";
 import { CreditsBadge } from "@/components/nav/CreditsBadge";
+import { StreakBadge } from "@/components/nav/StreakBadge";
 import { MobileNavMenu } from "@/components/nav/MobileNavMenu";
 import "./globals.css";
 
@@ -50,6 +51,7 @@ export default function RootLayout({
                 <nav className="flex items-center gap-3 text-sm sm:gap-4">
                   <Show when="signed-in">
                     <div className="hidden items-center gap-4 sm:flex sm:gap-6">
+                      <StreakBadge />
                       <IqPointsBadge />
                       <CreditsBadge />
                       <ReviewBadge />

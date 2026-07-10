@@ -11,6 +11,7 @@ import { DailyRecallCard } from "@/components/dashboard/DailyRecallCard";
 import { DailyQuizCard } from "@/components/dashboard/DailyQuizCard";
 import { DocumentCarousel } from "@/components/dashboard/DocumentCarousel";
 import { CoursesRail } from "@/components/dashboard/CoursesRail";
+import { TrialEndedModal } from "@/components/billing/TrialEndedModal";
 import { DocumentCardSkeleton, type DocumentStat } from "@/components/dashboard/DocumentCard";
 import { SpacesGrid } from "@/components/dashboard/SpacesGrid";
 import { PlusIcon, FileTextIcon, ClockIcon, BrainIcon } from "@/components/ui/icons";
@@ -74,6 +75,7 @@ export function DashboardView({
 
   return (
     <div className="flex flex-col gap-8">
+      <TrialEndedModal />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display text-3xl italic tracking-tight">{title}</h1>

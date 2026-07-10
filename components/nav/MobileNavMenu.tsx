@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { IqPointsBadge } from "@/components/nav/IqPointsBadge";
 import { CreditsBadge } from "@/components/nav/CreditsBadge";
 import { ReviewBadge } from "@/components/nav/ReviewBadge";
+import { StreakBadge } from "@/components/nav/StreakBadge";
 import { NavLinks } from "@/components/nav/NavLinks";
 import { MenuIcon, XIcon } from "@/components/ui/icons";
 
@@ -46,6 +47,7 @@ export function MobileNavMenu() {
       {open && (
         <div className="absolute right-0 top-12 z-50 flex w-64 flex-col gap-4 rounded-2xl border border-border bg-surface p-4 shadow-lg">
           <div className="flex flex-wrap items-center gap-2">
+            <StreakBadge />
             <IqPointsBadge />
             <CreditsBadge />
             <ReviewBadge />

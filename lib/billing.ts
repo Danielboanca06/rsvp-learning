@@ -17,8 +17,10 @@ function currentPeriodStart(now = new Date()): Date {
 export async function getBillingStatus(userId: string, db: PrismaClient = defaultPrisma): Promise<BillingStatus> {
   const plan = await getUserPlan(userId, db);
 
+  // trialEndsAt is returned for every plan: the UI uses a past value on the
+  // free plan to show the end-of-trial upgrade pitch.
   const [planRow, credits, quota] = await Promise.all([
-    plan === "trial" ? db.userPlan.findUnique({ where: { userId } }) : Promise.resolve(null),
+    db.userPlan.findUnique({ where: { userId } }),
     db.userCredits.findUnique({ where: { userId } }),
     db.freeQuotaCounter.findUnique({ where: { userId } }),
   ]);

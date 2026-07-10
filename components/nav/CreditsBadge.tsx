@@ -6,11 +6,16 @@ import { usePathname } from "next/navigation";
 import { ZapIcon } from "@/components/ui/icons";
 
 type BillingStatus = {
-  plan: "free" | "pro";
+  plan: "free" | "trial" | "pro";
+  trialEndsAt: string | null;
   creditBalance: number;
   freeQuotaUsed: number;
   freeQuotaLimit: number;
 };
+
+function trialDaysLeft(trialEndsAt: string): number {
+  return Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+}
 
 export function CreditsBadge() {
   const pathname = usePathname();
@@ -41,7 +46,9 @@ export function CreditsBadge() {
   const label =
     status.plan === "pro"
       ? `${status.creditBalance} credits`
-      : `${Math.max(status.freeQuotaLimit - status.freeQuotaUsed, 0)} free left`;
+      : status.plan === "trial"
+        ? `Trial · ${status.trialEndsAt ? `${trialDaysLeft(status.trialEndsAt)}d` : ""} · ${status.creditBalance} cr`
+        : `${Math.max(status.freeQuotaLimit - status.freeQuotaUsed, 0)} free left`;
 
   return (
     <Link
