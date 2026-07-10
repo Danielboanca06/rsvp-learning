@@ -4,7 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/Button";
-import { ArrowRightIcon, CheckIcon, LockIcon, RefreshIcon, SparklesIcon } from "@/components/ui/icons";
+import { ArrowRightIcon, CheckIcon, LockIcon, MessageCircleIcon, RefreshIcon, SparklesIcon } from "@/components/ui/icons";
 
 export type CourseModuleView = {
   id: string;
@@ -29,11 +29,14 @@ export function ModuleCard({
   module,
   justUnlocked,
   onGenerate,
+  onOpenTutor,
 }: {
   module: CourseModuleView;
   /** Plays the unlock celebration animation once when true. */
   justUnlocked?: boolean;
   onGenerate: (order: number) => void;
+  /** Opens the persistent per-module tutor thread (generated modules only). */
+  onOpenTutor?: (module: CourseModuleView) => void;
 }) {
   const locked = module.status === "locked";
   const completed = module.status === "completed";
@@ -75,6 +78,18 @@ export function ModuleCard({
         {generating && <p className="mt-2 text-xs text-accent">Writing this module for you — usually under a minute.</p>}
         {module.status === "failed" && (
           <p className="mt-2 text-xs text-danger">Generation failed — your credits were refunded.</p>
+        )}
+        {(module.status === "ready" || completed) && module.documentId && onOpenTutor && (
+          <button
+            type="button"
+            onClick={() => onOpenTutor(module)}
+            className="mt-2 flex items-center gap-1.5 text-xs font-medium text-muted transition-colors hover:text-accent"
+          >
+            <span className="inline-flex [&>svg]:h-3.5 [&>svg]:w-3.5">
+              <MessageCircleIcon />
+            </span>
+            Ask the tutor
+          </button>
         )}
       </div>
 

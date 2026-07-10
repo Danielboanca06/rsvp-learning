@@ -15,6 +15,8 @@ import { SessionComplete } from "@/components/rsvp/SessionComplete";
 import { QuizRunner, type QuizData } from "@/components/quiz/QuizRunner";
 import { UpgradePrompt } from "@/components/billing/UpgradePrompt";
 import { SelectionChatPanel } from "@/components/chat/SelectionChatPanel";
+import { ModuleTutorPanel } from "@/components/chat/ModuleTutorPanel";
+import { MessageCircleIcon } from "@/components/ui/icons";
 import { markdownToWords } from "@/lib/markdown";
 
 type Chunk = {
@@ -66,6 +68,10 @@ function ReadSessionInner() {
   // "Ask AI" chat, anchored to the highlighted passage. Keyed by chunk so a
   // new selection replaces the conversation instead of appending to it.
   const [askAi, setAskAi] = useState<{ chunkId: string; selectionText: string } | null>(null);
+  // Course-module tutor (generated documents only): one persistent thread for
+  // the whole module, opened from the reader header.
+  const [tutorDocument, setTutorDocument] = useState<{ title: string } | null>(null);
+  const [tutorOpen, setTutorOpen] = useState(false);
   const wpmPersistTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleWpmChange = useCallback(
@@ -127,6 +133,7 @@ function ReadSessionInner() {
       if (cancelled) return;
       setWpm(session.currentWpm);
       setCurrentChunk(nextChunk);
+      if (document.sourceType === "generated") setTutorDocument({ title: document.title });
       setView("rsvp");
     }
 
@@ -269,7 +276,22 @@ function ReadSessionInner() {
         >
           {view === "rsvp" && currentChunk && (
             <div className="flex flex-col gap-4">
-              <div className="flex justify-end">
+              <div className="flex items-center justify-end gap-3">
+                {tutorDocument && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAskAi(null);
+                      setTutorOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:border-accent/40 hover:text-accent"
+                  >
+                    <span className="inline-flex [&>svg]:h-3.5 [&>svg]:w-3.5">
+                      <MessageCircleIcon />
+                    </span>
+                    Ask the tutor
+                  </button>
+                )}
                 <ReadingModeToggle mode={readingMode} onChange={handleReadingModeChange} />
               </div>
               {readingMode === "rsvp" ? (
@@ -355,6 +377,26 @@ function ReadSessionInner() {
               chunkId={askAi.chunkId}
               selectionText={askAi.selectionText}
               onClose={() => setAskAi(null)}
+            />
+          </div>
+        </aside>
+      )}
+
+      {tutorOpen && tutorDocument && (
+        <div
+          onClick={() => setTutorOpen(false)}
+          className="animate-overlay-fade-in fixed inset-0 z-30 bg-background/60 backdrop-blur-sm md:hidden"
+        />
+      )}
+      {tutorOpen && tutorDocument && (
+        <aside className="animate-sheet-rise-in fixed inset-x-0 bottom-0 top-14 z-40 flex flex-col rounded-t-3xl border-t border-border bg-surface shadow-lg md:static md:inset-auto md:z-auto md:w-96 md:shrink-0 md:animate-none md:rounded-none md:border-t-0 md:border-l md:border-border/60 md:bg-transparent md:pl-6 md:shadow-none">
+          <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-border md:hidden" />
+          <div className="flex min-h-0 flex-1 flex-col px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 md:sticky md:top-6 md:h-[calc(100vh-10rem)] md:min-h-[24rem] md:flex-none md:p-0">
+            <ModuleTutorPanel
+              key={params.id}
+              documentId={params.id}
+              moduleTitle={tutorDocument.title}
+              onClose={() => setTutorOpen(false)}
             />
           </div>
         </aside>

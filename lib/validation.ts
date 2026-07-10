@@ -111,13 +111,21 @@ export const courseModuleOutputSchema = z.object({
     .max(10),
 });
 
-export const createChatThreadSchema = z.object({
-  kind: z.enum(["selection", "practice"]),
-  documentId: z.string().min(1),
-  chunkId: z.string().min(1),
-  selectionText: z.string().trim().min(1).max(2000),
-  parentThreadId: z.string().min(1).optional(),
-});
+export const createChatThreadSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.enum(["selection", "practice"]),
+    documentId: z.string().min(1),
+    chunkId: z.string().min(1),
+    selectionText: z.string().trim().min(1).max(2000),
+    parentThreadId: z.string().min(1).optional(),
+  }),
+  // Module tutor: one persistent thread per generated course module, anchored
+  // to the module's document only (no selection).
+  z.object({
+    kind: z.literal("module"),
+    documentId: z.string().min(1),
+  }),
+]);
 
 export const sendChatMessageSchema = z.object({
   content: z.string().trim().min(1).max(4000),

@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/Card";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ModuleCard, type CourseModuleView } from "@/components/course/ModuleCard";
+import { ModuleTutorPanel } from "@/components/chat/ModuleTutorPanel";
 
 type CourseView = {
   id: string;
@@ -28,6 +29,7 @@ export function CourseHome({ courseId }: { courseId: string }) {
   const [course, setCourse] = useState<CourseView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [justUnlockedOrder, setJustUnlockedOrder] = useState<number | null>(null);
+  const [tutorModule, setTutorModule] = useState<{ documentId: string; title: string } | null>(null);
   const completionAttempted = useRef<Set<number>>(new Set());
 
   const refetch = useCallback(async (): Promise<CourseView | null> => {
@@ -154,9 +156,34 @@ export function CourseHome({ courseId }: { courseId: string }) {
             module={module}
             justUnlocked={justUnlockedOrder === module.order}
             onGenerate={handleGenerate}
+            onOpenTutor={(entry) =>
+              entry.documentId && setTutorModule({ documentId: entry.documentId, title: entry.title })
+            }
           />
         ))}
       </ol>
+
+      {/* Module tutor: mobile bottom sheet / desktop right panel, matching the
+          reader's chat surfaces (plain CSS entrances — see read page note). */}
+      {tutorModule && (
+        <div
+          onClick={() => setTutorModule(null)}
+          className="animate-overlay-fade-in fixed inset-0 z-30 bg-background/60 backdrop-blur-sm"
+        />
+      )}
+      {tutorModule && (
+        <aside className="animate-sheet-rise-in fixed inset-x-0 bottom-0 top-14 z-40 flex flex-col rounded-t-3xl border-t border-border bg-surface shadow-lg md:inset-x-auto md:right-6 md:top-20 md:bottom-6 md:w-[26rem] md:rounded-2xl md:border md:border-border">
+          <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-border md:hidden" />
+          <div className="flex min-h-0 flex-1 flex-col px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 md:p-4">
+            <ModuleTutorPanel
+              key={tutorModule.documentId}
+              documentId={tutorModule.documentId}
+              moduleTitle={tutorModule.title}
+              onClose={() => setTutorModule(null)}
+            />
+          </div>
+        </aside>
+      )}
     </div>
   );
 }
