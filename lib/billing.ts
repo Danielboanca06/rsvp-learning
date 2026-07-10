@@ -1,9 +1,10 @@
 import { PrismaClient, Prisma } from "@prisma/client";
 import { prisma as defaultPrisma } from "@/lib/prisma";
-import { FREE_MONTHLY_QUOTA, getUserTier } from "@/lib/llm-quota";
+import { FREE_MONTHLY_QUOTA, getUserPlan, type Plan } from "@/lib/llm-quota";
 
 export type BillingStatus = {
-  plan: "free" | "pro";
+  plan: Plan;
+  trialEndsAt: string | null;
   creditBalance: number;
   freeQuotaUsed: number;
   freeQuotaLimit: number;
@@ -14,10 +15,10 @@ function currentPeriodStart(now = new Date()): Date {
 }
 
 export async function getBillingStatus(userId: string, db: PrismaClient = defaultPrisma): Promise<BillingStatus> {
-  const tier = await getUserTier(userId, db);
-  const plan = tier === "paid" ? "pro" : "free";
+  const plan = await getUserPlan(userId, db);
 
-  const [credits, quota] = await Promise.all([
+  const [planRow, credits, quota] = await Promise.all([
+    plan === "trial" ? db.userPlan.findUnique({ where: { userId } }) : Promise.resolve(null),
     db.userCredits.findUnique({ where: { userId } }),
     db.freeQuotaCounter.findUnique({ where: { userId } }),
   ]);
@@ -27,6 +28,7 @@ export async function getBillingStatus(userId: string, db: PrismaClient = defaul
 
   return {
     plan,
+    trialEndsAt: planRow?.trialEndsAt?.toISOString() ?? null,
     creditBalance: credits?.balance ?? 0,
     freeQuotaUsed: quotaIsCurrentPeriod ? quota!.count : 0,
     freeQuotaLimit: FREE_MONTHLY_QUOTA,

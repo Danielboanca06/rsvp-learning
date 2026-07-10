@@ -54,9 +54,14 @@ export async function POST(request: NextRequest) {
         const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
         const userPlan = customerId ? await prisma.userPlan.findFirst({ where: { stripeCustomerId: customerId } }) : null;
         if (userPlan) {
+          // Annual subscriptions cycle yearly, so their renewal invoice grants
+          // 12 periods of credits at once; match on the invoice's price id.
+          const isAnnual = invoice.lines.data.some(
+            (line) => line.pricing?.price_details?.price === process.env.STRIPE_PRICE_PRO_ANNUAL
+          );
           await grantCredits(
             userPlan.userId,
-            CHECKOUT_PRODUCTS.subscription.creditsGranted,
+            CHECKOUT_PRODUCTS[isAnnual ? "subscription_annual" : "subscription"].creditsGranted,
             "stripe_subscription_grant",
             event.id
           );

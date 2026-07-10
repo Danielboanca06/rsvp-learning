@@ -29,9 +29,12 @@ describe("reserveLlmCall gating", () => {
     process.env.LLM_BACKEND = "direct";
     const { reserveLlmCall, FREE_MONTHLY_QUOTA } = await import("@/lib/llm-quota");
     const userId = "user_gate_free_regression";
+    // A brand-new user would lazily start a reverse trial (paid tier); this
+    // test targets the free-plan quota path, so pin the plan to free.
+    await db.userPlan.create({ data: { userId, plan: "free" } });
 
     const results = await Promise.all(
-      Array.from({ length: FREE_MONTHLY_QUOTA + 5 }, () => reserveLlmCall(userId, db))
+      Array.from({ length: FREE_MONTHLY_QUOTA + 5 }, () => reserveLlmCall(userId, "grading", db))
     );
 
     const allowed = results.filter((r) => r.ok).length;
@@ -45,9 +48,10 @@ describe("reserveLlmCall gating", () => {
     process.env.LLM_BACKEND = "ollama";
     const { reserveLlmCall, FREE_MONTHLY_QUOTA } = await import("@/lib/llm-quota");
     const userId = "user_gate_ollama_regression";
+    await db.userPlan.create({ data: { userId, plan: "free" } });
 
     const results = await Promise.all(
-      Array.from({ length: FREE_MONTHLY_QUOTA + 5 }, () => reserveLlmCall(userId, db))
+      Array.from({ length: FREE_MONTHLY_QUOTA + 5 }, () => reserveLlmCall(userId, "grading", db))
     );
 
     expect(results.every((r) => r.ok)).toBe(true);
