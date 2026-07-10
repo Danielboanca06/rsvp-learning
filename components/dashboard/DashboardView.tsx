@@ -10,6 +10,7 @@ import { ReviewCallout } from "@/components/dashboard/ReviewCallout";
 import { DailyRecallCard } from "@/components/dashboard/DailyRecallCard";
 import { DailyQuizCard } from "@/components/dashboard/DailyQuizCard";
 import { DocumentCarousel } from "@/components/dashboard/DocumentCarousel";
+import { CoursesRail } from "@/components/dashboard/CoursesRail";
 import { DocumentCardSkeleton, type DocumentStat } from "@/components/dashboard/DocumentCard";
 import { SpacesGrid } from "@/components/dashboard/SpacesGrid";
 import { PlusIcon, FileTextIcon, ClockIcon, BrainIcon } from "@/components/ui/icons";
@@ -29,6 +30,7 @@ export function DashboardView({
   quizRegenerateUrl,
   showDailyRecall,
   showSpaces = false,
+  showCourses = false,
   title,
   subtitle,
   newDocumentHref,
@@ -38,6 +40,7 @@ export function DashboardView({
   quizRegenerateUrl: string;
   showDailyRecall: boolean;
   showSpaces?: boolean;
+  showCourses?: boolean;
   title: string;
   subtitle: string;
   newDocumentHref: string;
@@ -115,6 +118,8 @@ export function DashboardView({
           </>
         )}
       </div>
+
+      {!loading && showCourses && <CoursesRail />}
 
       <div>
         <h2 className="mb-4 font-display text-xl italic tracking-tight">Recently studied</h2>
@@ -211,15 +216,22 @@ function EmptyState({ newDocumentHref }: { newDocumentHref: string }) {
       <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-accent">
         <FileTextIcon />
       </span>
-      <p className="font-medium">No documents yet</p>
+      <p className="font-medium">Nothing studied yet</p>
       <p className="max-w-sm text-sm text-muted">
-        Upload a text file or PDF to generate your first Learning Path and start building active recall.
+        Let the AI build you a course toward a goal, or upload a text file or PDF to generate a Learning Path.
       </p>
-      <Link href={newDocumentHref} className="mt-2 w-auto">
-        <Button icon={<PlusIcon />} className="w-auto px-6">
-          New Document
-        </Button>
-      </Link>
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+        <Link href="/courses/new" className="w-auto">
+          <Button icon={<PlusIcon />} className="w-auto px-6">
+            Create a course
+          </Button>
+        </Link>
+        <Link href={newDocumentHref} className="w-auto">
+          <Button variant="secondary" icon={<PlusIcon />} className="w-auto px-6">
+            New Document
+          </Button>
+        </Link>
+      </div>
     </Card>
   );
 }
