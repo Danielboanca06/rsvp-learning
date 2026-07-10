@@ -16,7 +16,7 @@ Most of this exists (uncommitted): `SelectionChatPanel`, `ChatPanel`, `ThreadDra
 
 **A3. Practice sub-thread anchoring.** Already modeled (`parentThreadId`, kind `practice`). Add: (a) the parent selection thread shows a persistent "Practice this passage" button (exists — verify state when a practice child already exists: re-open, don't duplicate); (b) on the document page, practice threads render as children of their module section with status (in progress / completed); (c) mark a practice thread `status: "archived"` (schema field exists) when the tutor declares the summary complete — detect via a structured tag the model emits (see A6).
 
-**A4. Chat quota gating.** `LlmTask` already includes `"chat"`. Verify every message POST route calls `reserveLlmCall` + records `LlmUsageEvent` with `task: "chat"` (grep shows gating on threads/messages route — confirm failure path returns the same 402-style payload `UpgradePrompt` expects, reusing `llmGateErrorResponse`).
+**A4. Chat quota gating.** ✅ Mostly done: the messages route already calls `reserveChatTurn` + `recordChatUsage`. Remaining: confirm the blocked-path response shape matches what `UpgradePrompt` consumes elsewhere (`llmGateErrorResponse`), and surface the block inside the chat panel (inline upgrade state, not a dead send button).
 
 **A5. Thread lifecycle UX.** Reconnect to an in-flight SSE stream on page refresh (or degrade gracefully: mark message `failed`, offer retry). Retry action for `status: "failed"` messages. Empty/error/loading states in `ChatPanel`. Cap thread history sent to the model (last N messages + system prompt) to bound input tokens.
 
@@ -157,7 +157,7 @@ Current gate charges a flat `CREDIT_COST_PER_CALL = 1` and counts every free act
 **F2. COGS monitoring.** Weekly query over `LlmUsageEvent` (`realCostUsd` by task/tier/user); alert (email to founder) if any user >$2/mo or free-tier paid-fallback spend > cap.
 **F3. Infra.** Vercel Hobby → **Pro before charging** (commercial-use ToS); confirm `maxDuration` on the two coursegen routes; Neon plan check; Stripe live-mode keys + webhook signing verification re-check; rate limiting on unauthenticated + LLM-backed routes (simple per-user token bucket in Postgres or Upstash free tier).
 **F4. Security/robustness.** Prompt-injection hygiene: document/course content is user-influenced — tutor prompts must treat document text as data (already quoted/delimited; audit). Zod-validate all LLM JSON outputs (exists for current tasks; required for the two new ones). PDF upload limits (size/page cap) before chunking spend.
-**F5. Tests/CI.** Vitest already set up. Required new coverage: per-task credit costs + pro-feature gate (`llm-quota`), course pipeline state machine (lock→generate→ready→complete→unlock, idempotency, refund-on-failure), syllabus/module zod parsing incl. repair path, trial expiry tier resolution, streak computation. Add a GitHub Actions workflow (lint + test) if not present.
+**F5. Tests/CI.** Vitest already set up. Required new coverage: per-task credit costs + pro-feature gate (`llm-quota`), course pipeline state machine (lock→generate→ready→complete→unlock, idempotency, refund-on-failure), syllabus/module zod parsing incl. repair path, trial expiry tier resolution, streak computation. Add a GitHub Actions workflow (lint + test) — none exists today (`.github/workflows` absent). E5's cron requires adding a `crons` entry to `vercel.json` (currently empty of crons).
 
 ---
 

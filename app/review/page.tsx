@@ -14,6 +14,7 @@ import { SocraticFeedback } from "@/components/rsvp/SocraticFeedback";
 import { PassBanner } from "@/components/rsvp/PassBanner";
 import { ReviewComplete } from "@/components/rsvp/ReviewComplete";
 import { ClockIcon, ArrowRightIcon } from "@/components/ui/icons";
+import { markdownToWords } from "@/lib/markdown";
 
 type DueChunk = {
   id: string;
@@ -178,7 +179,7 @@ export default function ReviewPage() {
         >
           {view === "rsvp" && currentChunk && (
             <RsvpPlayer
-              words={currentChunk.content.split(/\s+/).filter(Boolean)}
+              words={markdownToWords(currentChunk.content)}
               wpm={wpm}
               moduleTitle={currentChunk.title}
               documentId={currentChunk.document.id}

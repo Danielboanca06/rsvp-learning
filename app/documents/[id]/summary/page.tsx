@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { Markdown } from "@/components/ui/Markdown";
 import { cn } from "@/lib/cn";
 
 type Segment = {
@@ -69,7 +70,9 @@ export default function DocumentSummaryPage() {
                   {segment.order + 1}. {segment.sectionTitle && segment.sectionTitle !== segment.title ? `${segment.sectionTitle} · ` : ""}
                   {segment.title}
                 </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{segment.content}</p>
+                <div className="mt-2">
+                  <Markdown size="chat">{segment.content}</Markdown>
+                </div>
                 {segment.keyPoints.length > 0 && (
                   <ul className="mt-3 flex list-disc flex-col gap-1 pl-5 text-sm text-muted">
                     {segment.keyPoints.map((point, index) => (

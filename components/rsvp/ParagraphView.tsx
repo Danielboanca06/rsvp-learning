@@ -3,8 +3,10 @@
 import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { ArrowRightIcon, SearchIcon, StopIcon } from "@/components/ui/icons";
+import { Markdown } from "@/components/ui/Markdown";
 import { WordLookupPanel } from "@/components/vocabulary/WordLookupPanel";
 import { SelectionDefinePopover } from "@/components/rsvp/SelectionDefinePopover";
+import { markdownToWords } from "@/lib/markdown";
 
 export function ParagraphView({
   content,
@@ -26,15 +28,7 @@ export function ParagraphView({
   const [showLookup, setShowLookup] = useState(false);
   const paragraphsRef = useRef<HTMLDivElement>(null);
 
-  const paragraphs = useMemo(() => {
-    const parts = content
-      .split(/\n\s*\n/)
-      .map((paragraph) => paragraph.trim())
-      .filter(Boolean);
-    return parts.length > 0 ? parts : [content];
-  }, [content]);
-
-  const words = useMemo(() => content.split(/\s+/).filter(Boolean), [content]);
+  const words = useMemo(() => markdownToWords(content), [content]);
 
   return (
     <div className="flex flex-col gap-8 py-10">
@@ -43,15 +37,8 @@ export function ParagraphView({
         <span>{words.length} words</span>
       </div>
 
-      <div
-        ref={paragraphsRef}
-        className="flex select-text flex-col gap-4 rounded-2xl border border-border/60 bg-surface p-6"
-      >
-        {paragraphs.map((paragraph, index) => (
-          <p key={index} className="text-lg leading-relaxed text-foreground/90">
-            {paragraph}
-          </p>
-        ))}
+      <div ref={paragraphsRef} className="select-text rounded-2xl border border-border/60 bg-surface p-6">
+        <Markdown size="reading">{content}</Markdown>
       </div>
 
       <p className="text-xs text-muted">

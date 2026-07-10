@@ -13,6 +13,7 @@ import {
   type ChatStreamEvent,
   type ChatThreadDto,
   type MessagePart,
+  type TextPart,
 } from "@/lib/chat/protocol";
 
 export type CreateThreadParams = {
@@ -36,7 +37,19 @@ export type ChatStatus = {
 export type ChatError = {
   message: string;
   quotaBlocked: boolean;
+  /** Set when re-sending the failed message is a sensible recovery. */
+  retryable: boolean;
 } | null;
+
+let optimisticCounter = 0;
+function optimisticId(): string {
+  optimisticCounter += 1;
+  return `local-${Date.now()}-${optimisticCounter}`;
+}
+
+function hasStreamedText(parts: MessagePart[]): boolean {
+  return parts.some((part) => part.type === "text" && (part as TextPart).text.trim().length > 0);
+}
 
 export function useChatThread() {
   const [thread, setThread] = useState<ChatThreadDto | null>(null);
@@ -47,8 +60,13 @@ export function useChatThread() {
   const [busy, setBusy] = useState(false);
   // Serializes sends: a second sendMessage while a turn streams is dropped.
   const inFlight = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+  // Last content the user tried to send, for one-tap retry after a failure.
+  const lastSent = useRef<string | null>(null);
 
   const reset = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
     setThread(null);
     setMessages([]);
     setStreaming(null);
@@ -56,6 +74,13 @@ export function useChatThread() {
     setError(null);
     setBusy(false);
     inFlight.current = false;
+  }, []);
+
+  /** Cancels the in-flight assistant turn (or bootstrap). Safe to call on
+   * unmount — the server still persists whatever the model finishes. */
+  const stop = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
   }, []);
 
   const createThread = useCallback(async (params: CreateThreadParams): Promise<ChatThreadDto | null> => {
@@ -69,14 +94,14 @@ export function useChatThread() {
       });
       const json = await response.json();
       if (!response.ok) {
-        setError({ message: json.error ?? "Could not start the conversation.", quotaBlocked: false });
+        setError({ message: json.error ?? "Could not start the conversation.", quotaBlocked: false, retryable: false });
         return null;
       }
       setThread(json.thread);
       setMessages(json.thread.messages ?? []);
       return json.thread;
     } catch {
-      setError({ message: "Could not start the conversation.", quotaBlocked: false });
+      setError({ message: "Could not start the conversation.", quotaBlocked: false, retryable: false });
       return null;
     } finally {
       setBusy(false);
@@ -90,14 +115,14 @@ export function useChatThread() {
       const response = await fetch(`/api/chat/threads/${threadId}`);
       const json = await response.json();
       if (!response.ok) {
-        setError({ message: json.error ?? "Could not load the conversation.", quotaBlocked: false });
+        setError({ message: json.error ?? "Could not load the conversation.", quotaBlocked: false, retryable: false });
         return null;
       }
       setThread(json.thread);
       setMessages(json.thread.messages ?? []);
       return json.thread;
     } catch {
-      setError({ message: "Could not load the conversation.", quotaBlocked: false });
+      setError({ message: "Could not load the conversation.", quotaBlocked: false, retryable: false });
       return null;
     } finally {
       setBusy(false);
@@ -113,9 +138,14 @@ export function useChatThread() {
       inFlight.current = true;
       setBusy(true);
       setError(null);
+      lastSent.current = trimmed;
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const aborted = () => controller.signal.aborted;
 
       const optimisticUser: ChatMessageDto = {
-        id: `local-${Date.now()}`,
+        id: optimisticId(),
         threadId: target.id,
         role: "user",
         parts: [{ type: "text", text: trimmed }],
@@ -125,18 +155,33 @@ export function useChatThread() {
       setMessages((previous) => [...previous, optimisticUser]);
       setStatus({ state: "thinking", label: "Thinking" });
 
+      // Pre-stream failures never persisted the user message server-side, so
+      // the optimistic bubble must roll back — otherwise a retry would render
+      // the same message twice.
+      const rollbackOptimistic = () =>
+        setMessages((previous) => previous.filter((message) => message.id !== optimisticUser.id));
+
+      // Local accumulator: React state updates are async, so the reducer
+      // runs against this and the state mirrors it. Declared outside the try
+      // so the abort path can freeze whatever already streamed.
+      let liveParts: MessagePart[] = [];
+
       try {
         const response = await fetch(`/api/chat/threads/${target.id}/messages`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ content: trimmed }),
+          signal: controller.signal,
         });
 
         if (!response.ok || !response.body) {
           const json = await response.json().catch(() => ({}));
+          const quotaBlocked = response.status === 429;
+          rollbackOptimistic();
           setError({
             message: json.error ?? "The AI could not reply. Please try again.",
-            quotaBlocked: response.status === 429,
+            quotaBlocked,
+            retryable: !quotaBlocked,
           });
           setStatus(null);
           return;
@@ -145,10 +190,6 @@ export function useChatThread() {
         const parser = createSseParser();
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-
-        // Local accumulator: React state updates are async, so the reducer
-        // runs against this and the state mirrors it.
-        let liveParts: MessagePart[] = [];
 
         while (true) {
           const { done, value } = await reader.read();
@@ -176,7 +217,13 @@ export function useChatThread() {
               }
               case "error": {
                 const e = event as Extract<ChatStreamEvent, { type: "error" }>;
-                setError({ message: e.message, quotaBlocked: e.code === "quota_exceeded" });
+                setError({
+                  message: e.message,
+                  quotaBlocked: e.code === "quota_exceeded",
+                  // Mid-stream the user message is already persisted, so
+                  // "retry" here means asking again — still useful.
+                  retryable: e.code !== "quota_exceeded",
+                });
                 setStreaming(null);
                 setStatus(null);
                 break;
@@ -192,16 +239,42 @@ export function useChatThread() {
           }
         }
       } catch {
-        setError({ message: "Connection lost while the AI was replying.", quotaBlocked: false });
-        setStreaming(null);
-        setStatus(null);
+        if (aborted()) {
+          // Deliberate stop (user pressed stop, or the panel unmounted). Keep
+          // whatever partial reply already streamed as a frozen local message
+          // so the transcript doesn't visibly lose text.
+          if (hasStreamedText(liveParts)) {
+            const frozen: ChatMessageDto = {
+              id: optimisticId(),
+              threadId: target.id,
+              role: "assistant",
+              parts: liveParts,
+              status: "complete",
+              createdAt: new Date().toISOString(),
+            };
+            setMessages((existing) => [...existing, frozen]);
+          }
+          setStreaming(null);
+          setStatus(null);
+        } else {
+          rollbackOptimistic();
+          setError({ message: "Connection lost while the AI was replying.", quotaBlocked: false, retryable: true });
+          setStreaming(null);
+          setStatus(null);
+        }
       } finally {
+        if (abortRef.current === controller) abortRef.current = null;
         inFlight.current = false;
         setBusy(false);
       }
     },
     [thread]
   );
+
+  /** Re-sends the last message that failed. No-op while a turn is in flight. */
+  const retry = useCallback(() => {
+    if (lastSent.current) void sendMessage(lastSent.current);
+  }, [sendMessage]);
 
   return {
     thread,
@@ -213,6 +286,8 @@ export function useChatThread() {
     createThread,
     loadThread,
     sendMessage,
+    retry,
+    stop,
     reset,
   };
 }

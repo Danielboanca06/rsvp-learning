@@ -15,6 +15,7 @@ import { SessionComplete } from "@/components/rsvp/SessionComplete";
 import { QuizRunner, type QuizData } from "@/components/quiz/QuizRunner";
 import { UpgradePrompt } from "@/components/billing/UpgradePrompt";
 import { SelectionChatPanel } from "@/components/chat/SelectionChatPanel";
+import { markdownToWords } from "@/lib/markdown";
 
 type Chunk = {
   id: string;
@@ -256,7 +257,7 @@ function ReadSessionInner() {
   return (
     // The reading column stays centered until the AI chat opens; then it
     // shifts left (layout animation) to make room for the side panel.
-    <div className="mx-auto flex w-full max-w-5xl items-start justify-center gap-6">
+    <div className="mx-auto flex w-full max-w-5xl items-start justify-center gap-8">
       <motion.div layout transition={{ type: "spring", stiffness: 260, damping: 30 }} className="w-full min-w-0 max-w-xl">
         <AnimatePresence mode="wait">
         <motion.div
@@ -273,7 +274,7 @@ function ReadSessionInner() {
               </div>
               {readingMode === "rsvp" ? (
                 <RsvpPlayer
-                  words={currentChunk.content.split(/\s+/).filter(Boolean)}
+                  words={markdownToWords(currentChunk.content)}
                   wpm={wpm}
                   moduleTitle={chunkLabel(currentChunk)}
                   documentId={params.id}
@@ -334,28 +335,30 @@ function ReadSessionInner() {
         </AnimatePresence>
       </motion.div>
 
-      <AnimatePresence>
-        {askAi && (
-          <motion.aside
-            key="ask-ai-panel"
-            initial={{ opacity: 0, x: 32 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 32 }}
-            transition={{ type: "spring", stiffness: 260, damping: 30 }}
-            className="fixed inset-x-0 bottom-0 top-16 z-40 bg-background/80 p-4 backdrop-blur-sm md:static md:inset-auto md:z-auto md:w-96 md:shrink-0 md:bg-transparent md:p-0 md:backdrop-blur-none"
-          >
-            <div className="h-full md:sticky md:top-6 md:h-[calc(100vh-10rem)] md:min-h-[24rem]">
-              <SelectionChatPanel
-                key={`${askAi.chunkId}:${askAi.selectionText}`}
-                documentId={params.id}
-                chunkId={askAi.chunkId}
-                selectionText={askAi.selectionText}
-                onClose={() => setAskAi(null)}
-              />
-            </div>
-          </motion.aside>
-        )}
-      </AnimatePresence>
+      {/* Plain CSS entrance animations, matching ThreadDrawer — framer-motion
+          overlay enter/exit proved unreliable for the chat surfaces (frozen
+          entrances, exits that never unmount). Mobile scrim behind the sheet
+          (tap to close) so the sheet itself stays an opaque surface. */}
+      {askAi && (
+        <div
+          onClick={() => setAskAi(null)}
+          className="animate-overlay-fade-in fixed inset-0 z-30 bg-background/60 backdrop-blur-sm md:hidden"
+        />
+      )}
+      {askAi && (
+        <aside className="animate-sheet-rise-in fixed inset-x-0 bottom-0 top-14 z-40 flex flex-col rounded-t-3xl border-t border-border bg-surface shadow-lg md:static md:inset-auto md:z-auto md:w-96 md:shrink-0 md:animate-none md:rounded-none md:border-t-0 md:border-l md:border-border/60 md:bg-transparent md:pl-6 md:shadow-none">
+          <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-border md:hidden" />
+          <div className="flex min-h-0 flex-1 flex-col px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 md:sticky md:top-6 md:h-[calc(100vh-10rem)] md:min-h-[24rem] md:flex-none md:p-0">
+            <SelectionChatPanel
+              key={`${askAi.chunkId}:${askAi.selectionText}`}
+              documentId={params.id}
+              chunkId={askAi.chunkId}
+              selectionText={askAi.selectionText}
+              onClose={() => setAskAi(null)}
+            />
+          </div>
+        </aside>
+      )}
     </div>
   );
 }
