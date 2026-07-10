@@ -242,7 +242,7 @@ export default function DocumentOverviewPage() {
         </div>
       </div>
 
-      {openThreadId && <ThreadDrawer threadId={openThreadId} onClose={() => setOpenThreadId(null)} />}
+      <ThreadDrawer threadId={openThreadId} onClose={() => setOpenThreadId(null)} />
     </div>
   );
 }

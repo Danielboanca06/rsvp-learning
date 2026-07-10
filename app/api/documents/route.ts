@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { chunkDocumentGated, llmGateErrorResponse } from "@/lib/llm-quota";
 import { createDocumentSchema } from "@/lib/validation";
 import { resolveSpaceId, SpaceNotFoundError } from "@/lib/spaces";
+import { markdownToWords } from "@/lib/markdown";
 import { PDFParse } from "pdf-parse";
 
 // Chunking calls the LLM gateway with a 180s outer timeout (lib/llm.ts) — exceeds
@@ -123,7 +124,7 @@ export async function POST(request: NextRequest) {
           order: index,
           title: module.title,
           content: module.content,
-          wordCount: module.content.split(/\s+/).filter(Boolean).length,
+          wordCount: markdownToWords(module.content).length,
           sectionTitle: module.sectionTitle,
           keyPoints: module.keyPoints,
         })),

@@ -12,6 +12,8 @@
 // it only needs a task (which prompt/model group) and a tier (free vs paid routing).
 // Per-user quota/credit gating and usage recording live in lib/llm-quota.ts, one layer up.
 
+import { markdownToWords } from "@/lib/markdown";
+
 const LLM_BACKEND = process.env.LLM_BACKEND ?? "ollama";
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
@@ -351,7 +353,9 @@ function extractModules(raw: string): Array<{ sectionTitle: string | null; modul
 }
 
 function countWords(text: string): number {
-  return text.split(/\s+/).filter(Boolean).length;
+  // Module content may carry light markdown; size decisions should count the
+  // words the reader actually reads, not the formatting markers.
+  return markdownToWords(text).length;
 }
 
 function splitIntoSentences(text: string): string[] {
@@ -396,6 +400,8 @@ Segment the text below in two levels:
 2. Within each section, "modules": the actual learning units. Each module must cover exactly ONE self-contained idea, carry about 3-5 key points (never more), and be roughly 40-180 words. When a section is too large to recall at once, split it into several sequential modules at the natural seams between ideas — but do NOT fragment a single tight idea across modules just to hit a word count; a module must still make sense read on its own. Short documents may end up as one section with a few modules; that is fine.
 
 Do NOT just split on paragraph breaks — group related sentences together and split where the ideas actually shift. Preserve the original wording of the text exactly inside each module's "content" (do not paraphrase, summarize, or omit sentences); every part of the source text must appear in exactly one module, and sections and modules must appear in the same order as the source.
+
+Format each module's "content" as lightly-structured Markdown, without ever changing the words themselves: keep paragraph breaks (blank line between paragraphs), wrap the 1-3 most important key terms of the module in **bold**, and if (and only if) the source text genuinely enumerates items, format them as a Markdown list. Be conservative — most modules should just be one or two plain paragraphs with a couple of bolded terms. Never add headings, never add text that isn't in the source, never bold whole sentences.
 
 Return strictly a JSON object with one key, "sections": an array of objects, each with exactly two keys:
 - "title": a short (2-6 word) title for the section's topic.

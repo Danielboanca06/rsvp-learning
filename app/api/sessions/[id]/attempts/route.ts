@@ -8,6 +8,7 @@ import { submitAttemptSchema } from "@/lib/validation";
 import { completeSession, findNextChunk } from "@/lib/session";
 import { pointsEventData } from "@/lib/points";
 import { shouldTriggerModuleQuiz } from "@/lib/quiz";
+import { stripMarkdown } from "@/lib/markdown";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
@@ -32,7 +33,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   let grading;
   try {
-    grading = await gradeSummaryGated(userId, chunk.content, parsed.data.summary);
+    // Grade against the plain-text projection — the reader recalls words, not
+    // the markdown formatting the module content may carry.
+    grading = await gradeSummaryGated(userId, stripMarkdown(chunk.content), parsed.data.summary);
   } catch (error) {
     const response = llmGateErrorResponse(error);
     if (response) return response;

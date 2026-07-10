@@ -12,7 +12,7 @@ export function StatusBlock({ status }: { status: NonNullable<ChatStatus> }) {
     <motion.div
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex items-center gap-2 text-xs text-muted"
+      className="flex items-center gap-2 text-xs italic text-muted"
     >
       <span className="relative flex h-2 w-2">
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent/60" />

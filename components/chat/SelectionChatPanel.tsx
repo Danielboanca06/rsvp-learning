@@ -15,6 +15,9 @@ import { BrainIcon, ArrowRightIcon } from "@/components/ui/icons";
 
 const INITIAL_QUESTION = "Help me understand what this passage means.";
 
+const SELECTION_SUGGESTIONS = ["Explain more simply", "Give an example", "Why does this matter?"];
+const PRACTICE_SUGGESTIONS = ["I'm not sure — give me a hint", "Break it into smaller steps"];
+
 export function SelectionChatPanel({
   documentId,
   chunkId,
@@ -34,16 +37,19 @@ export function SelectionChatPanel({
   useEffect(() => {
     // One bootstrap per mounted panel; the panel remounts (via key) when the
     // user asks about a different selection.
-    if (bootstrapped.current) return;
-    bootstrapped.current = true;
-
-    (async () => {
-      const thread = await chat.createThread({ kind: "selection", documentId, chunkId, selectionText });
-      if (thread) {
-        setSelectionThread(thread);
-        await chat.sendMessage(INITIAL_QUESTION, thread);
-      }
-    })();
+    if (!bootstrapped.current) {
+      bootstrapped.current = true;
+      (async () => {
+        const thread = await chat.createThread({ kind: "selection", documentId, chunkId, selectionText });
+        if (thread) {
+          setSelectionThread(thread);
+          await chat.sendMessage(INITIAL_QUESTION, thread);
+        }
+      })();
+    }
+    // Closing the panel (or switching selection) must cancel the in-flight
+    // stream — otherwise the dead panel keeps consuming tokens invisibly.
+    return () => chat.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -71,13 +77,16 @@ export function SelectionChatPanel({
       title={mode === "practice" ? "Practice understanding" : "Ask AI"}
       contextQuote={selectionText}
       onClose={onClose}
+      documentId={documentId}
+      chunkId={chunkId}
+      suggestions={mode === "practice" ? PRACTICE_SUGGESTIONS : SELECTION_SUGGESTIONS}
       placeholder={mode === "practice" ? "Write your own summary of the passage..." : "Ask about this passage..."}
       headerActions={
         mode === "selection" ? (
           <button
             onClick={startPractice}
             disabled={!selectionThread || chat.busy}
-            className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:border-accent/50 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span className="inline-flex [&>svg]:h-3.5 [&>svg]:w-3.5">
               <BrainIcon />
@@ -88,7 +97,7 @@ export function SelectionChatPanel({
           <button
             onClick={backToDiscussion}
             disabled={chat.busy}
-            className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span className="inline-flex rotate-180 [&>svg]:h-3.5 [&>svg]:w-3.5">
               <ArrowRightIcon />
