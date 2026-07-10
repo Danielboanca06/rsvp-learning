@@ -4,10 +4,16 @@
 // 2. Trial-day-6 email — users whose trial ends within the next 24h. The cron
 //    runs once a day and the window is exactly one day wide, so each user gets
 //    this at most once, no dedupe column needed.
+// 3. COGS alert (Mondays) — emails the founder when any user's monthly LLM
+//    spend exceeds $2 or free/trial paid-model spend exceeds its cap.
 import { NextRequest, NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { reviewReminderHtml, sendEmail, trialEndingHtml } from "@/lib/email";
+import { nonProPaidSpendThisMonthUsd } from "@/lib/llm-quota";
+import { freeTierPaidSpendCapUsd } from "@/lib/pricing";
+
+const PER_USER_MONTHLY_SPEND_ALERT_USD = 2;
 
 const REVIEW_RESEND_COOLDOWN_MS = 20 * 60 * 60 * 1000; // one email per ~day, cron-jitter tolerant
 
@@ -104,5 +110,43 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ reviewEmails, trialEmails });
+  // --- COGS monitoring (weekly, on Mondays) ---
+  let cogsAlerted = false;
+  const founderEmail = process.env.FOUNDER_ALERT_EMAIL;
+  if (founderEmail && now.getUTCDay() === 1) {
+    try {
+      const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      const [perUser, nonProSpend] = await Promise.all([
+        prisma.llmUsageEvent.groupBy({
+          by: ["userId"],
+          _sum: { realCostUsd: true },
+          where: { createdAt: { gte: periodStart } },
+        }),
+        nonProPaidSpendThisMonthUsd(),
+      ]);
+
+      const heavyUsers = perUser.filter((row) => (row._sum.realCostUsd ?? 0) > PER_USER_MONTHLY_SPEND_ALERT_USD);
+      const capBreached = nonProSpend > freeTierPaidSpendCapUsd();
+
+      if (heavyUsers.length > 0 || capBreached) {
+        const lines = [
+          ...(capBreached
+            ? [`<p>Free/trial paid-model spend this month: $${nonProSpend.toFixed(2)} (cap $${freeTierPaidSpendCapUsd()}).</p>`]
+            : []),
+          ...heavyUsers.map(
+            (row) => `<p>User ${row.userId}: $${(row._sum.realCostUsd ?? 0).toFixed(2)} this month.</p>`
+          ),
+        ];
+        cogsAlerted = await sendEmail({
+          to: founderEmail,
+          subject: "Active Recall COGS alert",
+          html: `<div style="font-family: sans-serif;">${lines.join("")}</div>`,
+        });
+      }
+    } catch (error) {
+      console.error("COGS check failed:", error);
+    }
+  }
+
+  return NextResponse.json({ reviewEmails, trialEmails, cogsAlerted });
 }
