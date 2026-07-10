@@ -80,7 +80,7 @@ export function SelectionChatPanel({
       documentId={documentId}
       chunkId={chunkId}
       suggestions={mode === "practice" ? PRACTICE_SUGGESTIONS : SELECTION_SUGGESTIONS}
-      placeholder={mode === "practice" ? "Write your own summary of the passage..." : "Ask about this passage..."}
+      placeholder={mode === "practice" ? "Write your summary..." : "Ask about this passage..."}
       headerActions={
         mode === "selection" ? (
           <button

@@ -204,7 +204,7 @@ export default function DocumentOverviewPage() {
                   >
                     {mastered ? <CheckIcon /> : chunk.order + 1}
                   </span>
-                  <div className="flex-1">
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium leading-tight">{chunk.title}</p>
                     <p className="mt-0.5 text-xs text-muted">{chunk.wordCount} words</p>
                   </div>
@@ -218,18 +218,19 @@ export default function DocumentOverviewPage() {
                 </div>
 
                 {/* AI discussions anchored to this module, with practice
-                    exercises nested as child sections under their parent. */}
+                    exercises nested under their parent. Everything is
+                    min-w-0-constrained: long thread titles must truncate,
+                    never widen the page (the old layout pushed the whole
+                    page off-center on mobile). */}
                 {topLevelThreads.length > 0 && (
-                  <div className="ml-6 flex flex-col gap-1 border-l border-border/60 pl-4">
+                  <div className="ml-3 flex min-w-0 flex-col gap-0.5 border-l-2 border-border/60 pl-2 sm:ml-6 sm:pl-3">
                     {topLevelThreads.map((thread) => {
                       const childThreads = chunkThreads.filter((child) => child.parentThreadId === thread.id);
                       return (
-                        <div key={thread.id} className="flex flex-col gap-1">
+                        <div key={thread.id} className="flex min-w-0 flex-col gap-0.5">
                           <ThreadRow thread={thread} onOpen={() => setOpenThreadId(thread.id)} />
                           {childThreads.map((child) => (
-                            <div key={child.id} className="ml-5">
-                              <ThreadRow thread={child} onOpen={() => setOpenThreadId(child.id)} />
-                            </div>
+                            <ThreadRow key={child.id} thread={child} onOpen={() => setOpenThreadId(child.id)} nested />
                           ))}
                         </div>
                       );
@@ -247,18 +248,21 @@ export default function DocumentOverviewPage() {
   );
 }
 
-function ThreadRow({ thread, onOpen }: { thread: ThreadSummary; onOpen: () => void }) {
+function ThreadRow({ thread, onOpen, nested = false }: { thread: ThreadSummary; onOpen: () => void; nested?: boolean }) {
   const isPractice = thread.kind === "practice";
   return (
     <button
       onClick={onOpen}
-      className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm text-muted transition-colors hover:bg-surface hover:text-foreground"
+      className={cn(
+        "flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-muted transition-colors hover:bg-surface hover:text-foreground",
+        nested && "pl-7"
+      )}
     >
       <span className={cn("inline-flex shrink-0 [&>svg]:h-3.5 [&>svg]:w-3.5", isPractice ? "text-accent" : "")}>
         {isPractice ? <BrainIcon /> : <MessageCircleIcon />}
       </span>
-      <span className="truncate">{thread.title}</span>
-      <span className="shrink-0 text-xs text-muted/70">
+      <span className="min-w-0 flex-1 truncate">{thread.title}</span>
+      <span className="shrink-0 text-[0.6875rem] tabular-nums text-muted/70">
         {thread._count.messages} {thread._count.messages === 1 ? "message" : "messages"}
       </span>
     </button>

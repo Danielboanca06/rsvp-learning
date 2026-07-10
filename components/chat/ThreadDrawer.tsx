@@ -67,7 +67,7 @@ export function ThreadDrawer({ threadId, onClose }: { threadId: string | null; o
         className="animate-sheet-rise-in fixed inset-x-0 bottom-0 top-14 z-50 flex flex-col rounded-t-3xl border-t border-border bg-surface shadow-lg sm:inset-x-auto sm:right-0 sm:top-0 sm:w-[26rem] sm:rounded-none sm:border-l sm:border-t-0"
       >
         <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-border sm:hidden" />
-        <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-2 sm:pt-4">
+        <div className="flex min-h-0 flex-1 flex-col px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:pt-4">
           <ChatPanel
             chat={chat}
             title={title}
@@ -77,7 +77,7 @@ export function ThreadDrawer({ threadId, onClose }: { threadId: string | null; o
             chunkId={chat.thread?.chunkId ?? undefined}
             suggestions={isPractice ? PRACTICE_SUGGESTIONS : SELECTION_SUGGESTIONS}
             loadingFallback={<LoadingSkeleton />}
-            placeholder={isPractice ? "Write your own summary of the passage..." : "Ask about this passage..."}
+            placeholder={isPractice ? "Write your summary..." : "Ask about this passage..."}
           />
         </div>
       </div>
