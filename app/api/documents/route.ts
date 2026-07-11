@@ -12,6 +12,12 @@ import { PDFParse } from "pdf-parse";
 // project (extends Hobby-tier functions to 300s max).
 export const maxDuration = 180;
 
+// Upload caps enforced BEFORE any chunking spend: a giant PDF costs real LLM
+// money and would blow the request budget anyway.
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_PDF_PAGES = 100;
+const MAX_TEXT_WORDS = 60_000;
+
 export async function GET() {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -55,7 +61,13 @@ export async function GET() {
   return NextResponse.json({ documents: documentsWithMastery });
 }
 
+class UploadLimitError extends Error {}
+
 async function extractTextFromFile(file: File): Promise<string> {
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new UploadLimitError("That file is too large — the limit is 10 MB.");
+  }
+
   const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
   const buffer = Buffer.from(await file.arrayBuffer());
 
@@ -65,6 +77,9 @@ async function extractTextFromFile(file: File): Promise<string> {
 
   const parser = new PDFParse({ data: buffer });
   const result = await parser.getText();
+  if (result.total > MAX_PDF_PAGES) {
+    throw new UploadLimitError(`That PDF has ${result.total} pages — the limit is ${MAX_PDF_PAGES}.`);
+  }
   return result.text;
 }
 
@@ -82,10 +97,24 @@ export async function POST(request: NextRequest) {
   let derivedTitle = "";
 
   if (file instanceof File && file.size > 0) {
-    text = await extractTextFromFile(file);
+    try {
+      text = await extractTextFromFile(file);
+    } catch (error) {
+      if (error instanceof UploadLimitError) {
+        return NextResponse.json({ error: error.message }, { status: 413 });
+      }
+      throw error;
+    }
     derivedTitle = file.name.replace(/\.[^/.]+$/, "");
   } else if (typeof rawText === "string") {
     text = rawText;
+  }
+
+  if (markdownToWords(text).length > MAX_TEXT_WORDS) {
+    return NextResponse.json(
+      { error: `That document is too long (over ${MAX_TEXT_WORDS.toLocaleString()} words). Split it into parts.` },
+      { status: 413 }
+    );
   }
 
   const title = typeof rawTitle === "string" && rawTitle.trim().length > 0 ? rawTitle : derivedTitle || "Untitled Document";

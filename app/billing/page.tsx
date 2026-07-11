@@ -8,13 +8,20 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { ZapIcon } from "@/components/ui/icons";
 
 type BillingStatus = {
-  plan: "free" | "pro";
+  plan: "free" | "trial" | "pro";
+  trialEndsAt: string | null;
   creditBalance: number;
   freeQuotaUsed: number;
   freeQuotaLimit: number;
 };
 
-type CheckoutKind = "subscription" | "topup_small" | "topup_large";
+type CheckoutKind = "subscription" | "subscription_annual" | "topup_small" | "topup_large";
+
+const PLAN_LABELS: Record<BillingStatus["plan"], string> = { free: "Free", trial: "Trial", pro: "Pro" };
+
+function trialDaysLeft(trialEndsAt: string): number {
+  return Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+}
 
 function BillingPageInner() {
   const searchParams = useSearchParams();
@@ -79,12 +86,15 @@ function BillingPageInner() {
             </span>
             <div>
               <p className="text-xs uppercase tracking-wide text-muted">Current plan</p>
-              <p className="font-display text-2xl italic">{status.plan === "pro" ? "Pro" : "Free"}</p>
+              <p className="font-display text-2xl italic">{PLAN_LABELS[status.plan]}</p>
             </div>
           </div>
-          {status.plan === "pro" ? (
+          {status.plan !== "free" ? (
             <p className="text-sm text-muted">
               <span className="font-medium text-foreground">{status.creditBalance}</span> credits remaining.
+              {status.plan === "trial" && status.trialEndsAt && (
+                <> Trial ends in {trialDaysLeft(status.trialEndsAt)} day{trialDaysLeft(status.trialEndsAt) === 1 ? "" : "s"} — upgrade to keep building courses.</>
+              )}
             </p>
           ) : (
             <p className="text-sm text-muted">
@@ -97,11 +107,11 @@ function BillingPageInner() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <Card className="flex flex-col gap-4">
           <div>
-            <p className="font-display text-xl italic">Pro</p>
-            <p className="mt-1 text-sm text-muted">Monthly credit allotment, no free-plan caps.</p>
+            <p className="font-display text-xl italic">Pro · monthly</p>
+            <p className="mt-1 text-sm text-muted">500 credits every month — AI courses, tutor, and grading without caps.</p>
           </div>
           <Button
             loading={pendingKind === "subscription"}
@@ -109,6 +119,20 @@ function BillingPageInner() {
             onClick={() => startCheckout("subscription")}
           >
             {status?.plan === "pro" ? "Current plan" : "Upgrade to Pro"}
+          </Button>
+        </Card>
+
+        <Card className="flex flex-col gap-4 border-accent/40">
+          <div>
+            <p className="font-display text-xl italic">Pro · annual</p>
+            <p className="mt-1 text-sm text-muted">The same Pro, around 30% cheaper over a year.</p>
+          </div>
+          <Button
+            loading={pendingKind === "subscription_annual"}
+            disabled={status?.plan === "pro"}
+            onClick={() => startCheckout("subscription_annual")}
+          >
+            {status?.plan === "pro" ? "Current plan" : "Go annual & save"}
           </Button>
         </Card>
 

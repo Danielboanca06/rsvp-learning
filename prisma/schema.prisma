@@ -12,6 +12,10 @@ model Document {
   id          String     @id @default(cuid())
   userId      String
   title       String
+  // "upload" (user-provided text/PDF) | "generated" (AI course module content).
+  // Generated documents live in their course's Space so every existing surface
+  // (read flow, quizzes, FSRS review, daily quiz, analytics) works unchanged.
+  sourceType  String     @default("upload")
   createdAt   DateTime   @default(now())
   startingWpm Int        @default(250)
   spaceId     String
@@ -19,9 +23,47 @@ model Document {
   chunks      Chunk[]
   sessions    Session[]
   quizzes     Quiz[]
+  courseModule CourseModule?
 
   @@index([userId])
   @@index([spaceId])
+}
+
+// --- AI course generation ---
+// A Course is a learner-goal-driven syllabus whose modules are generated lazily
+// into ordinary Documents (sourceType "generated") inside a dedicated Space, so
+// the entire existing learning loop applies to generated content unchanged.
+
+model Course {
+  id           String   @id @default(cuid())
+  userId       String
+  spaceId      String // dedicated Space created per course
+  title        String
+  goal         String // learner's stated objective
+  learnerBrief Json // intake answers: level, time budget, motivation, interests
+  status       String   @default("draft") // draft | active | completed | archived
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  modules      CourseModule[]
+
+  @@index([userId, status])
+}
+
+model CourseModule {
+  id          String    @id @default(cuid())
+  courseId    String
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  order       Int
+  title       String
+  objectives  Json // string[] learning objectives (Bloom verbs)
+  summary     String // 1-2 sentence syllabus description
+  status      String    @default("locked") // locked | unlocked | generating | ready | completed | failed
+  documentId  String?   @unique // set once generated; content lives in existing Document/Chunk
+  document    Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  generatedAt DateTime?
+
+  @@unique([courseId, order])
+  @@index([courseId])
 }
 
 model Space {
@@ -239,7 +281,10 @@ model ChatMessage {
 
 model UserPlan {
   userId               String    @id
-  plan                 String    @default("free") // free | pro
+  plan                 String    @default("free") // free | trial | pro
+  // Reverse trial: set at first sign-in, checked lazily in getUserTier — an
+  // expired trial resolves to "free" with no cron needed.
+  trialEndsAt          DateTime?
   stripeCustomerId     String?   @unique
   stripeSubscriptionId String?   @unique
   currentPeriodEnd     DateTime?
@@ -275,18 +320,27 @@ model CreditLedger {
 }
 
 model LlmUsageEvent {
-  id          String   @id @default(cuid())
-  userId      String
-  task        String   // chunking | grading | quizgen
-  tier        String   // free | paid
-  servedModel String   // actual model LiteLLM routed to
-  success     Boolean
-  tokensIn    Int?
-  tokensOut   Int?
-  realCostUsd Float?
-  latencyMs   Int?
-  createdAt   DateTime @default(now())
+  id             String   @id @default(cuid())
+  userId         String
+  task           String   // chunking | grading | quizgen | chat | coursegen_syllabus | coursegen_module
+  tier           String   // free | paid
+  servedModel    String   // actual model LiteLLM routed to
+  success        Boolean
+  tokensIn       Int?
+  tokensOut      Int?
+  realCostUsd    Float?
+  latencyMs      Int?
+  // Credits deducted for this call (paid tier only) so revenue-vs-cost per task
+  // is a single aggregate query.
+  creditsCharged Int?
+  createdAt      DateTime @default(now())
 
   @@index([userId, createdAt])
   @@index([task, createdAt])
+}
+
+model EmailPreference {
+  userId     String    @id
+  enabled    Boolean   @default(true)
+  lastSentAt DateTime?
 }

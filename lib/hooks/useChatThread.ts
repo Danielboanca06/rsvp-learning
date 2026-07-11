@@ -16,13 +16,20 @@ import {
   type TextPart,
 } from "@/lib/chat/protocol";
 
-export type CreateThreadParams = {
-  kind: "selection" | "practice";
-  documentId: string;
-  chunkId: string;
-  selectionText: string;
-  parentThreadId?: string;
-};
+export type CreateThreadParams =
+  | {
+      kind: "selection" | "practice";
+      documentId: string;
+      chunkId: string;
+      selectionText: string;
+      parentThreadId?: string;
+    }
+  | {
+      // Module tutor: one persistent thread per generated course module; the
+      // server returns the existing thread when one already exists.
+      kind: "module";
+      documentId: string;
+    };
 
 export type StreamingMessage = {
   id: string;

@@ -32,7 +32,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       gate.reason === "quota_exceeded"
         ? "Free plan AI quota exceeded for this period. Upgrade to Pro for more."
         : "Not enough credits to run this AI action. Buy more credits to continue.";
-    return NextResponse.json({ error: message }, { status: 429 });
+    return NextResponse.json({ error: message, reason: gate.reason }, { status: 429 });
   }
 
   await prisma.chatMessage.create({
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
       try {
         await runAssistantTurn({ threadId: thread.id, userId, tier: gate.tier, emit });
-        await recordChatUsage(userId, gate.tier);
+        await recordChatUsage(userId, gate);
       } catch (error) {
         console.error("Chat stream failed:", error);
         emit({ type: "error", code: "stream_failed", message: "The AI could not finish its reply." });

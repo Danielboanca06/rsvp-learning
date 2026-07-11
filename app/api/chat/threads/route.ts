@@ -18,6 +18,34 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid thread request." }, { status: 400 });
   }
+
+  // Module tutor: exactly ONE persistent thread per module document — a repeat
+  // open returns the existing conversation instead of creating a sibling.
+  if (parsed.data.kind === "module") {
+    const { documentId } = parsed.data;
+    const document = await prisma.document.findFirst({
+      where: { id: documentId, userId },
+      select: { id: true, title: true },
+    });
+    if (!document) {
+      return NextResponse.json({ error: "Module not found." }, { status: 404 });
+    }
+
+    const existing = await prisma.chatThread.findFirst({
+      where: { userId, kind: "module", documentId },
+      include: { messages: { orderBy: { createdAt: "asc" } } },
+    });
+    if (existing) {
+      return NextResponse.json({ thread: existing });
+    }
+
+    const thread = await prisma.chatThread.create({
+      data: { userId, kind: "module", title: `Tutor: ${document.title}`, documentId },
+      include: { messages: { orderBy: { createdAt: "asc" } } },
+    });
+    return NextResponse.json({ thread }, { status: 201 });
+  }
+
   const { kind, documentId, chunkId, selectionText, parentThreadId } = parsed.data;
 
   const chunk = await prisma.chunk.findFirst({

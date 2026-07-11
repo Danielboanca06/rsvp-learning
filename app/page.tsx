@@ -16,6 +16,7 @@ export default async function HomePage() {
       quizRegenerateUrl="/api/quizzes/daily/regenerate"
       showDailyRecall
       showSpaces
+      showCourses
       title="Dashboard"
       subtitle="Track mastery across every document you've studied."
       newDocumentHref="/documents/new"

@@ -13,8 +13,55 @@ import { prisma as defaultPrisma } from "@/lib/prisma";
 import { streamChatCompletion, type ChatCompletionMessage } from "@/lib/llm-chat";
 import type { Tier } from "@/lib/llm";
 import { applyEventToParts, type ChatStreamEvent, type MessagePart, type TextPart } from "@/lib/chat/protocol";
-import { buildPracticeSystemPrompt, buildSelectionSystemPrompt } from "@/lib/chat/prompts";
+import {
+  buildModuleTutorPrompt,
+  buildPracticeSystemPrompt,
+  buildSelectionSystemPrompt,
+} from "@/lib/chat/prompts";
 import { chatTools, type ToolContext } from "@/lib/chat/tools";
+import type { LearnerBrief } from "@/lib/validation";
+
+/** System prompt for a module-tutor thread, assembled from the course the
+ * thread's document was generated for. Falls back to the selection prompt
+ * shape if the course context is gone (module deleted from a draft, etc.). */
+async function buildModuleSystemPrompt(
+  db: PrismaClient,
+  userId: string,
+  documentId: string | null
+): Promise<string> {
+  const courseModule = documentId
+    ? await db.courseModule.findFirst({
+        where: { documentId, course: { userId } },
+        include: { course: { include: { modules: { orderBy: { order: "asc" } } } } },
+      })
+    : null;
+
+  if (!courseModule) {
+    return buildSelectionSystemPrompt("(the module this conversation was anchored to)");
+  }
+
+  const brief = courseModule.course.learnerBrief as LearnerBrief | null;
+  const briefLines = brief
+    ? [
+        `Self-assessed level: ${brief.level}`,
+        `Time budget: about ${brief.timeBudgetMinutesPerDay} minutes per day`,
+        `Motivation (learner's words): """${brief.motivation}"""`,
+        ...(brief.interests ? [`Interests (learner's words): """${brief.interests}"""`] : []),
+      ].join("\n")
+    : "(no intake answers on file)";
+
+  return buildModuleTutorPrompt({
+    courseTitle: courseModule.course.title,
+    courseGoal: courseModule.course.goal,
+    moduleTitle: courseModule.title,
+    objectives: (courseModule.objectives as string[]) ?? [],
+    learnerBrief: briefLines,
+    syllabusOutline: courseModule.course.modules
+      .map((entry) => `${entry.order + 1}. ${entry.title} — ${entry.summary}`)
+      .join("\n"),
+    learnerProfile: null,
+  });
+}
 
 export type EmitEvent = (event: ChatStreamEvent) => void;
 
@@ -86,9 +133,11 @@ export async function runAssistantTurn(options: {
     // --- Prompt assembly ---
     const selectionText = thread.selectionText ?? "";
     const systemPrompt =
-      thread.kind === "practice"
-        ? buildPracticeSystemPrompt(selectionText)
-        : buildSelectionSystemPrompt(selectionText);
+      thread.kind === "module"
+        ? await buildModuleSystemPrompt(db, userId, thread.documentId)
+        : thread.kind === "practice"
+          ? buildPracticeSystemPrompt(selectionText)
+          : buildSelectionSystemPrompt(selectionText);
 
     const llmMessages: ChatCompletionMessage[] = [
       { role: "system", content: systemPrompt },
