@@ -15,13 +15,20 @@ export function ModuleTutorPanel({
   documentId,
   moduleTitle,
   onClose,
+  pendingQuote,
+  onPendingQuoteHandled,
 }: {
   documentId: string;
   moduleTitle: string;
   onClose: () => void;
+  /** A passage selected via "Ask AI" — asked into this same persistent thread
+   * instead of spawning a separate selection thread. */
+  pendingQuote?: string | null;
+  onPendingQuoteHandled?: () => void;
 }) {
   const chat = useChatThread();
   const bootstrapped = useRef(false);
+  const lastAskedQuote = useRef<string | null>(null);
 
   useEffect(() => {
     if (!bootstrapped.current) {
@@ -31,6 +38,13 @@ export function ModuleTutorPanel({
     return () => chat.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!pendingQuote || !chat.thread || pendingQuote === lastAskedQuote.current) return;
+    lastAskedQuote.current = pendingQuote;
+    chat.sendMessage(`Help me understand this passage:\n\n"${pendingQuote}"`);
+    onPendingQuoteHandled?.();
+  }, [pendingQuote, chat.thread, chat, onPendingQuoteHandled]);
 
   return (
     <ChatPanel

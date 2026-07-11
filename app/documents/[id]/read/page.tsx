@@ -72,6 +72,9 @@ function ReadSessionInner() {
   // the whole module, opened from the reader header.
   const [tutorDocument, setTutorDocument] = useState<{ title: string } | null>(null);
   const [tutorOpen, setTutorOpen] = useState(false);
+  // A passage the reader wants explained, asked into the tutor thread rather
+  // than a separate one-off conversation.
+  const [tutorPendingQuote, setTutorPendingQuote] = useState<string | null>(null);
   const wpmPersistTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleWpmChange = useCallback(
@@ -313,7 +316,14 @@ function ReadSessionInner() {
                   chunkId={currentChunk.id}
                   onComplete={() => setView("summary")}
                   onStop={handleStop}
-                  onAskAi={(text) => setAskAi({ chunkId: currentChunk.id, selectionText: text })}
+                  onAskAi={(text) => {
+                    if (tutorDocument) {
+                      setTutorPendingQuote(text);
+                      setTutorOpen(true);
+                    } else {
+                      setAskAi({ chunkId: currentChunk.id, selectionText: text });
+                    }
+                  }}
                 />
               )}
             </div>
@@ -397,6 +407,8 @@ function ReadSessionInner() {
               documentId={params.id}
               moduleTitle={tutorDocument.title}
               onClose={() => setTutorOpen(false)}
+              pendingQuote={tutorPendingQuote}
+              onPendingQuoteHandled={() => setTutorPendingQuote(null)}
             />
           </div>
         </aside>
