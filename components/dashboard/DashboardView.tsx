@@ -49,29 +49,48 @@ export function DashboardView({
   const [data, setData] = useState<AnalyticsResponse | null>(null);
   const [points, setPoints] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError(false);
     setData(null);
 
-    Promise.all([
-      fetch(analyticsUrl).then((res) => res.json()),
-      fetch("/api/points").then((res) => res.json()),
-    ])
-      .then(([analyticsJson, pointsJson]) => {
+    async function load() {
+      try {
+        const [analyticsRes, pointsRes] = await Promise.all([fetch(analyticsUrl), fetch("/api/points")]);
+        if (!analyticsRes.ok || !pointsRes.ok) throw new Error("Failed to load dashboard data");
+        const [analyticsJson, pointsJson] = await Promise.all([analyticsRes.json(), pointsRes.json()]);
         if (cancelled) return;
         setData(analyticsJson);
         setPoints(pointsJson.total ?? 0);
-      })
-      .finally(() => {
+      } catch (err) {
+        console.error("Failed to load dashboard data:", err);
+        if (!cancelled) setError(true);
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    }
+
+    load();
 
     return () => {
       cancelled = true;
     };
   }, [analyticsUrl]);
+
+  if (!loading && (error || !data)) {
+    return (
+      <Card className="flex flex-col items-center gap-3 py-12 text-center">
+        <p className="font-medium">Couldn&apos;t load your dashboard</p>
+        <p className="max-w-sm text-sm text-muted">Something went wrong fetching your data. Please try again.</p>
+        <Button onClick={() => window.location.reload()} className="w-auto px-6">
+          Retry
+        </Button>
+      </Card>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-8">
