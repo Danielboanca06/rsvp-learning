@@ -61,7 +61,7 @@ export const learnerBriefSchema = z.object({
 });
 
 export const createCourseSchema = z.object({
-  goal: z.string().trim().min(3).max(500),
+  goal: z.string().trim().min(3).max(2000),
   brief: learnerBriefSchema,
 });
 

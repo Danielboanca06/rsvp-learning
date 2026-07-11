@@ -198,7 +198,9 @@ export function CourseWizard() {
                 onChange={(event) => setGoal(event.target.value)}
                 placeholder='e.g. "SQL well enough to analyze my startup&apos;s data" or "the fundamentals of music theory"'
                 className="h-28"
+                maxLength={2000}
               />
+              <p className="-mt-3 text-right text-xs text-muted">{goal.length}/2000</p>
               <Button disabled={goal.trim().length < 3} onClick={() => setStep(1)}>
                 Continue
               </Button>

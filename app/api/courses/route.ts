@@ -40,7 +40,9 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = createCourseSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "A learning goal and intake answers are required." }, { status: 400 });
+    const message = parsed.error.issues[0]?.message ?? "A learning goal and intake answers are required.";
+    const path = parsed.error.issues[0]?.path.join(".");
+    return NextResponse.json({ error: path ? `${path}: ${message}` : message }, { status: 400 });
   }
 
   try {
